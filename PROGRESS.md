@@ -1,8 +1,9 @@
 # PROGRESS.md — Restaurant Voice AI Agent
 
 ## Project Status Overview
-- **Status:** Phase 2, Step 2 Completed (Local LLM Service Verified)
-- **Last Updated:** 2026-11-09
+
+- **Status:** Phase 2, Step 3 Completed (Grounded Agent Router & Idle Session TTL Verified)
+- **Last Updated:** 2026-11-10
 
 ---
 
@@ -55,21 +56,29 @@
   - [x] Re-ran Phase 1 database test suite: **21 / 21 tests passed** (0.479s), verifying database layer remains intact.
 
 - [x] **Phase 2 – Step 3: Structured Tool Calling & Grounded Agent Router (Verified)**
-  - [x] Implemented modular Grounded Agent service ([`src/services/agent_service.py`](file:///c:/Users/Safiya%20Shaik/Downloads/restaurant-voice-agent/src/services/agent_service.py)):
+  - [x] Implemented modular Grounded Agent service (`src/services/agent_service.py`):
     - Supported 8 standardized customer intents: `greeting`, `menu_inquiry`, `ingredient_inquiry`, `allergen_inquiry`, `availability_inquiry`, `reservation_request`, `reservation_cancellation`, `unknown`.
     - Extracted entities: `menu_item_name`, `allergen_name`, `requested_reservation_date`, `requested_reservation_time`, `number_of_guests`, `reservation_identifier`, `customer_name`, `customer_phone`.
     - Local LLM structured extraction via validated JSON schema (`INTENT_EXTRACTION_PROMPT`) with deterministic regex/keyword fallback (`_extract_rule_based`).
     - Deterministic routing to Phase 1 SQLite CRUD operations (`get_menu_items`, `get_menu_item_by_name`, `get_ingredients_for_item`, `check_allergens_for_item`, `find_safe_items_for_allergens`, `find_available_tables`, `create_reservation`, `cancel_reservation`).
     - Food Safety Grounding: Unverified dishes and unlisted items strictly trigger safe fallbacks; authoritative database allergen facts are delivered directly to prevent LLM hallucination.
     - Multi-turn reservation slot filling: In-memory session state tracks pending booking parameters and prompts only for missing slots before Python-level validation and atomic DB creation.
-  - [x] Implemented and executed unit test suite ([`tests/test_agent_service.py`](file:///c:/Users/Safiya%20Shaik/Downloads/restaurant-voice-agent/tests/test_agent_service.py)):
-    - **24 / 24 unit tests passed** (0.840s; covers intent extraction, routing, slot filling, boundary validation, cancellation, and error handling).
-  - [x] Implemented and executed live integration test suite ([`tests/test_agent_integration.py`](file:///c:/Users/Safiya%20Shaik/Downloads/restaurant-voice-agent/tests/test_agent_integration.py)):
+  - [x] Implemented and executed unit test suite (`tests/test_agent_service.py`):
+    - **33 / 33 unit tests passed**, covering intent extraction, routing, reservation slot filling, validation, cancellation, session isolation, idle TTL expiration, and error handling.
+  - [x] Implemented and executed live integration test suite (`tests/test_agent_integration.py`):
     - **4 / 4 integration tests passed** against live local Ollama `qwen2.5:1.5b` and SQLite `data/restaurant.db`.
-  - [x] Re-ran full project regression test suite:
-    - **60 / 60 offline unit tests passed** (21 DB + 15 LLM + 24 Agent; 1.237s).
-    - **8 / 8 live Ollama integration tests passed** (4 LLM + 4 Agent).
-    - **Grand Total: 68 / 68 tests passing across the project (100%)**.
+  - [x] Implemented idle-session TTL:
+    - Added `last_activity_at` to `InteractionState`.
+    - Sessions expire based on inactivity rather than creation time.
+    - Existing sessions refresh their activity timestamp on access.
+    - Added tests for activity refresh, idle expiration, and session isolation.
+  - [x] Executed complete project regression test suite:
+    - Agent integration: **4 / 4 passed**.
+    - Agent service: **33 / 33 passed**.
+    - Database: **21 / 21 passed**.
+    - Ollama integration: **4 / 4 passed**.
+    - LLM service: **15 / 15 passed**.
+    - **Grand Total: 77 / 77 tests passed (100%).**
 
 - [ ] **Phase 3: Speech-to-Text (STT) via faster-whisper**
   - [ ] Configure `faster-whisper` (`base.en` / `tiny.en` on CPU with `int8` quantization).
@@ -99,20 +108,20 @@
 
 ## Architectural & Technical Decisions Log
 
-| Decision ID | Topic | Decision | Justification |
-|-------------|-------|----------|---------------|
-| **DEC-001** | STT Model Selection | `faster-whisper` with `base.en` / `tiny.en` (int8, CPU) | Provides robust transcription accuracy while keeping memory footprint low on an 8 GB system. |
-| **DEC-002** | TTS Engine | Piper TTS (ONNX voice model on CPU) | Fast local speech synthesis without cloud dependencies or paid APIs. |
-| **DEC-003** | Local LLM Verification | Use existing local `qwen2.5:1.5b` (Q4_K_M) via Ollama | Verified 986 MB model blob is already cached on disk; prevents redundant downloads and runs locally on CPU. |
-| **DEC-004** | Grounded Safety Architecture | DB-Grounded Retrieval with Deterministic Fallbacks | LLM does not invent recipe ingredients. All safety answers are grounded strictly in SQLite records; unlisted items trigger a safe fallback message. |
-| **DEC-005** | Reservation Duration Logic | Configurable booking conflict window (`DEFAULT_RESERVATION_DURATION_MINUTES`) | Avoids hardcoded 90-minute assumptions; allows the restaurant's seating policy to be configured in settings. |
-| **DEC-006** | Performance & Memory Policy | Empirical benchmarking and active memory profiling | Avoids absolute guarantees; monitors memory footprint on the 8 GB host to ensure system stability. |
-| **DEC-007** | Frontend Framework | React + TypeScript + Vite + CSS | Modern, lightweight, type-safe client with fast development cycle; leverages existing Node.js v24.11.1 installation without extra runtime installations. |
-| **DEC-008** | Explicit Allergen Verification Status | `allergen_status` column in `menu_items` (`'verified'` vs `'unverified'`) | Prevents unverified dishes from being treated as allergen-free. `find_safe_items_for_allergens()` strictly excludes unverified dishes. |
-| **DEC-009** | Best-Fit Table Allocation | Tables sorted by `capacity ASC, table_number ASC` | Assigns the smallest table that can accommodate the party size, preserving larger tables (e.g. 6-8 pax) for larger groups. |
-| **DEC-010** | Database Test Isolation | Unique in-memory URI per test method (`file:memdb_{uuid}?mode=memory&cache=shared`) | Guarantees complete isolation across unit tests, preventing shared state contamination in concurrent or sequential test runs. |
-| **DEC-011** | Zero-Dependency LLM Client | Standard Python `urllib.request` communicating with Ollama `/api/chat` | Eliminates external SDK dependencies and API keys; handles timeouts, network failures, and latency tracking cleanly. |
-| **DEC-012** | Voice-First LLM Output Contract | Low temperature (0.2), 1-3 sentences max, no markdown, no emojis | Ensures generated text sounds natural, clear, and unfragmented when fed to Piper Text-to-Speech in subsequent phases. |
-| **DEC-013** | Direct Grounded Allergen Delivery | Deliver verified SQLite allergen facts directly to caller without LLM re-synthesis | Prevents local LLMs from hallucinating negations (e.g. inverting "contains gluten" to "gluten-free") during natural language generation for critical food safety inquiries. |
-| **DEC-014** | In-Memory Session Slot Filling | `InteractionState` class scoped per interaction session | Preserves pending booking parameters (date, time, party size, name, phone) across conversational turns without requiring external database state. |
-
+| Decision ID | Topic                                 | Decision                                                                            | Justification                                                                                                                                                               |
+| ----------- | ------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **DEC-001** | STT Model Selection                   | `faster-whisper` with `base.en` / `tiny.en` (int8, CPU)                             | Provides robust transcription accuracy while keeping memory footprint low on an 8 GB system.                                                                                |
+| **DEC-002** | TTS Engine                            | Piper TTS (ONNX voice model on CPU)                                                 | Fast local speech synthesis without cloud dependencies or paid APIs.                                                                                                        |
+| **DEC-003** | Local LLM Verification                | Use existing local `qwen2.5:1.5b` (Q4_K_M) via Ollama                               | Verified 986 MB model blob is already cached on disk; prevents redundant downloads and runs locally on CPU.                                                                 |
+| **DEC-004** | Grounded Safety Architecture          | DB-Grounded Retrieval with Deterministic Fallbacks                                  | LLM does not invent recipe ingredients. All safety answers are grounded strictly in SQLite records; unlisted items trigger a safe fallback message.                         |
+| **DEC-005** | Reservation Duration Logic            | Configurable booking conflict window (`DEFAULT_RESERVATION_DURATION_MINUTES`)       | Avoids hardcoded 90-minute assumptions; allows the restaurant's seating policy to be configured in settings.                                                                |
+| **DEC-006** | Performance & Memory Policy           | Empirical benchmarking and active memory profiling                                  | Avoids absolute guarantees; monitors memory footprint on the 8 GB host to ensure system stability.                                                                          |
+| **DEC-007** | Frontend Framework                    | React + TypeScript + Vite + CSS                                                     | Modern, lightweight, type-safe client with fast development cycle; leverages existing Node.js v24.11.1 installation without extra runtime installations.                    |
+| **DEC-008** | Explicit Allergen Verification Status | `allergen_status` column in `menu_items` (`'verified'` vs `'unverified'`)           | Prevents unverified dishes from being treated as allergen-free. `find_safe_items_for_allergens()` strictly excludes unverified dishes.                                      |
+| **DEC-009** | Best-Fit Table Allocation             | Tables sorted by `capacity ASC, table_number ASC`                                   | Assigns the smallest table that can accommodate the party size, preserving larger tables (e.g. 6-8 pax) for larger groups.                                                  |
+| **DEC-010** | Database Test Isolation               | Unique in-memory URI per test method (`file:memdb_{uuid}?mode=memory&cache=shared`) | Guarantees complete isolation across unit tests, preventing shared state contamination in concurrent or sequential test runs.                                               |
+| **DEC-011** | Zero-Dependency LLM Client            | Standard Python `urllib.request` communicating with Ollama `/api/chat`              | Eliminates external SDK dependencies and API keys; handles timeouts, network failures, and latency tracking cleanly.                                                        |
+| **DEC-012** | Voice-First LLM Output Contract       | Low temperature (0.2), 1-3 sentences max, no markdown, no emojis                    | Ensures generated text sounds natural, clear, and unfragmented when fed to Piper Text-to-Speech in subsequent phases.                                                       |
+| **DEC-013** | Direct Grounded Allergen Delivery     | Deliver verified SQLite allergen facts directly to caller without LLM re-synthesis  | Prevents local LLMs from hallucinating negations (e.g. inverting "contains gluten" to "gluten-free") during natural language generation for critical food safety inquiries. |
+| **DEC-014** | In-Memory Session Slot Filling        | `InteractionState` class scoped per interaction session                             | Preserves pending booking parameters (date, time, party size, name, phone) across conversational turns without requiring external database state.                           |
+| **DEC-015** | Session Idle TTL                      | `last_activity_at` with a configurable 30-minute idle timeout                       | Expires inactive sessions while preserving active customer conversations and their pending reservation details.                                                             |
