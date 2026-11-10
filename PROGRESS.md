@@ -2,7 +2,7 @@
 
 ## Project Status Overview
 
-- **Status:** Phase 4 Piper TTS service implemented; live voice verification and benchmarking pending
+- **Status:** Phases 0–4 complete; Phase 5 (FastAPI orchestration) and Phase 6 (React frontend) not started; Phase 7 (QA and benchmarking) pending.
 - **Last Updated:** 2026-11-10
 
 ---
@@ -80,29 +80,33 @@
     - LLM service: **15 / 15 passed**.
     - **Grand Total: 77 / 77 tests passed (100%).**
 
-- [ ] **Phase 3: Speech-to-Text (STT) via faster-whisper**
-  - [ ] Configure `faster-whisper` (`base.en` / `tiny.en` on CPU with `int8` quantization).
-  - [ ] Implement `stt_service.py` to ingest audio and return text transcriptions.
-  - [ ] Benchmark transcription latency and memory usage on CPU.
+- [x] **Phase 3: Speech-to-Text (STT) via faster-whisper (Complete)**
+  - [x] Configure `faster-whisper` (`tiny.en` by default on CPU with `int8` quantization); verify the locally downloaded model loads.
+  - [x] Implement `stt_service.py` to ingest audio and return text transcriptions, with lazy model reuse and error handling.
+  - [x] Run mocked STT unit tests: **16 passed, 2 subtests passed**.
 
-- [ ] **Phase 4: Text-to-Speech (TTS) via Piper**
-  - [x] Implement `tts_service.py` for local WAV speech synthesis using Piper 1.8+; the default voice is `en_US-lessac-medium`.
+- [x] **Phase 4: Text-to-Speech (TTS) via Piper (Complete)**
+  - [x] Implement `tts_service.py` for local WAV speech synthesis using `piper-tts>=1.8.0`; the default voice is `en_US-lessac-medium`.
   - [x] Configure `PIPER_MODEL_DIR` (default `models/piper`) and `PIPER_MODEL_NAME`; load the model lazily and reuse it without downloading it.
   - [x] Add mocked tests for voice loading, WAV output, configuration and failure handling: **11 passed, 13 subtests passed**.
   - [x] Run regression tests on Python 3.11: **96 passed, 8 skipped, 15 subtests passed**; live Ollama tests skipped because Ollama was unavailable.
-  - [ ] Set up the local Piper ONNX voice model and verify real audio output on Windows / Python 3.10.
-  - [ ] Benchmark speech synthesis latency and memory usage on the target machine.
+  - [x] Download and verify the local `en_US-lessac-medium` Piper ONNX voice model.
+  - [x] Generate a real WAV on Windows using Python 3.10; manually verify playback is audible, clear, natural and not cut off.
+  - [x] Run local TTS tests: **11 / 11 passed**.
+  - [x] Run the complete local test suite: **104 / 104 passed in 46.09 seconds**.
 
-- [ ] **Phase 5: FastAPI Backend Orchestration**
+- [ ] **Phase 5: FastAPI Backend Orchestration (Not started)**
   - [ ] Build FastAPI server with REST and audio endpoints (`/api/voice`, `/api/chat`, `/api/menu`, `/api/reservations`).
   - [ ] Wire end-to-end pipeline: Audio -> faster-whisper -> Grounded Agent -> SQLite -> Piper TTS -> Audio response.
 
-- [ ] **Phase 6: React + TypeScript Frontend Development**
+- [ ] **Phase 6: React + TypeScript Frontend Development (Not started)**
   - [ ] Initialize Vite + React + TypeScript + CSS in `frontend/` using existing Node.js environment.
   - [ ] Implement microphone capture, live status indicator (idle, listening, processing, speaking), transcript view, and audio response player.
   - [ ] Connect frontend to FastAPI backend endpoints.
 
-- [ ] **Phase 7: Quality Assurance, Benchmarking & Failure Handling**
+- [ ] **Phase 7: Quality Assurance, Benchmarking & Failure Handling (Pending)**
+  - [ ] Benchmark transcription latency and memory usage on CPU.
+  - [ ] Benchmark speech synthesis latency and memory usage on the target machine.
   - [ ] Validate edge cases: allergen inquiry for unlisted items (safe fallback test), overbooking prevention, invalid date/time formats.
   - [ ] Profile memory and CPU utilization on the 8 GB machine during full pipeline execution.
   - [ ] Verify graceful handling when Ollama is unreachable or audio is corrupt.
