@@ -10,7 +10,7 @@ Architecture:
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 import json
 import logging
 import re
@@ -18,6 +18,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.core.config import config
+from src.core.reservation_policy import restaurant_today, validate_indian_mobile, validate_reservation_slot
 from src.database.connection import create_connection
 from src.database.crud import (
     cancel_reservation,
@@ -38,6 +39,22 @@ from src.services.llm_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# Allergen aliases are deliberately limited to names with an unambiguous mapping.
+ALLERGEN_PATTERNS = [
+    (r"\btree nuts?\b", "Tree Nuts"), (r"\bpeanuts?\b", "Peanuts"),
+    (r"\bshellfish\b", "Shellfish"), (r"\bfish\b", "Fish"),
+    (r"\bgluten\b", "Gluten"), (r"\b(?:dairy|milk)\b", "Dairy"),
+    (r"\beggs?\b", "Eggs"), (r"\bsoy\b", "Soy"), (r"\bsesame\b", "Sesame"),
+]
+
+
+def _ambiguous_allergen_request(message: str) -> bool:
+    text = re.sub(r"^\s*(?:and|or)\b", "", message, flags=re.I)
+    matched = {name for pattern, name in ALLERGEN_PATTERNS if re.search(pattern, text, re.I)}
+    free_terms = re.findall(r"\b([a-z]+)[ -]free\b", text, re.I)
+    return len(matched) > 1 or len(free_terms) > 1 or bool(re.search(r"\b(?:and|or)\b|[,/]", text, re.I))
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +117,8 @@ class InteractionState:
     slots: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     last_activity_at: datetime = field(default_factory=datetime.now)
+    last_menu_item: Optional[str] = None
+    awaiting_menu_intent: Optional[str] = None
 
     def update_slots(self, entities: ExtractedEntities) -> None:
         """Accumulate new entity values into slot state."""
@@ -129,6 +148,8 @@ class InteractionState:
         """Reset state upon booking confirmation or cancellation."""
         self.slots.clear()
         self.pending_intent = None
+        self.last_menu_item = None
+        self.awaiting_menu_intent = None
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +161,7 @@ def normalize_date_input(date_str: Optional[str]) -> Optional[str]:
     if not date_str:
         return None
     raw = str(date_str).strip().lower()
-    today = date.today()
+    today = restaurant_today()
 
     if raw in ("today", "tonight", "this evening"):
         return today.strftime("%Y-%m-%d")
@@ -333,8 +354,12 @@ class AgentService:
                 number_of_guests=guests,
                 reservation_identifier=res_id,
                 customer_name=data.get("customer_name") or None,
-                customer_phone=data.get("customer_phone") or None,
+                customer_phone=None,
             )
+
+            # Never trust a model to normalize a phone number: extract its raw text.
+            _, raw_entities = self._extract_rule_based(user_message, session)
+            entities.customer_phone = raw_entities.customer_phone
 
             # Post-check menu_item_name against database if LLM didn't extract it
             if not entities.menu_item_name:
@@ -385,23 +410,21 @@ class AgentService:
         # 1. Extract reservation date
         date_match = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", msg)
         if "today" in msg or "tonight" in msg:
-            entities.requested_reservation_date = date.today().strftime("%Y-%m-%d")
+            entities.requested_reservation_date = restaurant_today().strftime("%Y-%m-%d")
         elif "tomorrow" in msg:
-            entities.requested_reservation_date = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+            entities.requested_reservation_date = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
         elif date_match:
             entities.requested_reservation_date = date_match.group(1)
 
         # 2. Extract customer phone number (mask out ISO date first to avoid matching YYYY-MM-DD)
         text_without_dates = re.sub(r"\b\d{4}-\d{2}-\d{2}\b", "", user_message)
-        phone_explicit = re.search(r"\b(?:phone(?:\s*number)?|number|call me at)\s*(?:is|:)?\s*([+\d -]+)\b", text_without_dates, re.I)
+        phone_explicit = re.search(r"\b(?:phone(?:\s*number)?|number|call me at)\s*(?:is|:)?\s*([^\s,;]+(?:[ -]+[0-9][^\s,;]*)*)", text_without_dates, re.I)
         if phone_explicit:
             entities.customer_phone = phone_explicit.group(1).strip()
         else:
-            phone_match = re.search(r"\b(\+?\d[\d -]{6,}\d)\b", text_without_dates)
+            phone_match = re.search(r"(?<![\w+()./-])([+]?[0-9][0-9+(). -]{6,}[0-9])(?![\w+()./-])", text_without_dates)
             if phone_match:
-                digits = re.sub(r"\D", "", phone_match.group(1))
-                if len(digits) >= 7:
-                    entities.customer_phone = phone_match.group(1).strip()
+                entities.customer_phone = phone_match.group(1).strip()
 
         # 3. Extract number of guests
         party_match = re.search(r"\b(?:table for|party of)\s+(\d{1,2})\b", msg)
@@ -432,13 +455,21 @@ class AgentService:
         if name_match:
             entities.customer_name = name_match.group(1).capitalize()
 
-        # 7. Extract allergen names
-        known_allergens = ["gluten", "dairy", "eggs", "fish", "shellfish", "tree nuts", "peanuts", "peanut", "soy", "sesame", "nuts"]
-        for allergen in known_allergens:
-            if allergen in msg:
-                norm = "Peanuts" if allergen in ("peanut", "peanuts") else ("Tree Nuts" if allergen == "nuts" else allergen.capitalize())
-                entities.allergen_name = norm
+        # 7. Recognize tracked allergen aliases without substring collisions (fish/shellfish).
+        for pattern, allergen in ALLERGEN_PATTERNS:
+            if re.search(pattern, msg):
+                entities.allergen_name = allergen
                 break
+        if not entities.allergen_name and re.search(r"\bnuts?\b", msg):
+            entities.allergen_name = "nuts"
+        if not entities.allergen_name:
+            unknown = re.search(r"\b(?:contains?|has|allergic to|allergy to)\s+([a-z]+)(?:-free)?\b|\b([a-z]+)[ -]free\b", msg)
+            if not unknown:
+                unknown = re.search(r"\bdoes\b.*?\bhave\s+([a-z]+)\b|\b(?:free (?:of|from)|without|avoid(?:ing)?)\s+([a-z]+)\b", msg)
+            if unknown:
+                candidate = unknown.group(1) or (unknown.group(2) if unknown.lastindex and unknown.lastindex > 1 else None)
+                if candidate not in {"allergens", "allergen", "ingredients", "ingredient", "a", "any", "table"}:
+                    entities.allergen_name = candidate
 
         # 8. Match menu items from database or extract candidate name
         try:
@@ -452,9 +483,22 @@ class AgentService:
         except Exception:
             pass
 
+        # Do not silently turn an unlisted longer dish name into a known substring.
+        if entities.menu_item_name:
+            clause = re.search(r"\b(?:does|is)\s+(?:the\s+)?([a-zA-Z][a-zA-Z\s']+?)\s+(?:contain|have|made of|made with)\b", user_message, re.I)
+            if not clause:
+                clause = re.search(r"\bingredients?(?:\s+are)?\s+(?:in|of|for)\s+(?:the\s+)?([a-zA-Z][a-zA-Z\s']+?)(?:\s*\?|$)", user_message, re.I)
+            if clause:
+                candidate = re.sub(r"\s+please$", "", clause.group(1).strip(), flags=re.I)
+                known = entities.menu_item_name.lower()
+                if candidate.lower().startswith(known + " "):
+                    entities.menu_item_name = candidate.title()
+
         if not entities.menu_item_name:
             # Pattern-based dish candidate extraction for unlisted dishes
             dish_patterns = [
+                r"\b(?:does|is)\s+(?:the\s+)?([a-zA-Z][a-zA-Z\s']+?)\s+(?:contain|have|made of|made with)\b",
+                r"\b(?:ingredients?(?:\s+are)?\s+(?:in|of|for)|what(?: is|'s) in)\s+(?:the\s+)?([a-zA-Z][a-zA-Z\s']+?)(?:\s*\?|$)",
                 r"\b(?:do you have|do you serve|can i get|can i order|is there any)\s+([a-zA-Z\s']+?)(?:\s*(?:on the menu|\?|$))",
                 r"\b(?:what is in the|what's in the|ingredients in the)\s+([a-zA-Z\s']+?)(?:\s*(?:made of|\?|$))",
                 r"\b(?:does the|in the|about the|is the)\s+([a-zA-Z\s']+?)\s*(?:contain|have|made of|recipe|-free|\?|$)",
@@ -464,7 +508,7 @@ class AgentService:
                 if dm:
                     candidate = dm.group(1).strip()
                     candidate = re.sub(r"^(?:the|a|an)\s+", "", candidate, flags=re.IGNORECASE).strip()
-                    if len(candidate) > 2 and candidate.lower() not in ("menu", "table", "reservation"):
+                    if len(candidate) > 2 and candidate.lower() not in ("menu", "table", "reservation", "it", "this", "that", "there"):
                         entities.menu_item_name = candidate.title()
                         break
 
@@ -480,19 +524,19 @@ class AgentService:
         if any(w in msg for w in ("reserve", "book", "reservation", "booking")):
             return Intent.RESERVATION_REQUEST, entities
 
-        if any(w in msg for w in ("allergy", "allergens", "allergic", "safe to eat", "-free", "dairy-free", "gluten-free", "peanut-free")):
+        if any(w in msg for w in ("allergy", "allergen", "allergic", "safe to eat", "-free", "dairy-free", "gluten-free", "peanut-free", "free of", "free from", "without", "avoiding")) or re.search(r"\b[a-z]+ free\b", msg):
             return Intent.ALLERGEN_INQUIRY, entities
 
-        if entities.allergen_name and any(w in msg for w in ("contain", "have", "with", "in")):
+        if entities.allergen_name and any(w in msg for w in ("contain", "have", "with", " in ", "has")):
             return Intent.ALLERGEN_INQUIRY, entities
 
-        if any(w in msg for w in ("ingredient", "ingredients", "what is in", "what's in", "recipe")):
+        if any(w in msg for w in ("ingredient", "ingredients", "what is in", "what's in", "recipe", "made of", "made with")):
             return Intent.INGREDIENT_INQUIRY, entities
 
         if any(w in msg for w in ("available", "availability", "free table", "open table", "any tables", "have a table", "table for")):
             return Intent.AVAILABILITY_INQUIRY, entities
 
-        if any(w in msg for w in ("menu", "dish", "dishes", "appetizer", "appetizers", "main", "mains", "dessert", "desserts", "beverage", "beverages", "drink", "drinks", "price", "how much")) or entities.menu_item_name is not None:
+        if any(w in msg for w in ("menu", "dish", "dishes", "appetizer", "appetizers", "main", "mains", "dessert", "desserts", "beverage", "beverages", "drink", "drinks", "price", "how much", "vegetarian", "vegan")) or entities.menu_item_name is not None:
             return Intent.MENU_INQUIRY, entities
 
         if any(w in msg for w in ("hello", "hi", "hey", "good morning", "good evening", "hours", "open", "close")):
@@ -511,10 +555,58 @@ class AgentService:
     ) -> AgentResult:
         """Route customer message deterministically to SQLite CRUD operations and synthesize reply."""
         session = self.get_session(session_id)
-        intent, entities = self.extract_intent_and_entities(user_message, session)
+        # Explicit menu questions can be answered from SQLite without an LLM round trip.
+        # Keep the model for ambiguous requests and reservation slot filling.
+        rule_intent, rule_entities = self._extract_rule_based(user_message, session)
+        allergen_followup = bool(session.last_menu_item and rule_entities.allergen_name
+                                 and re.match(r"\s*(?:and|what about|how about)\b", user_message, re.I))
+        if session.pending_intent != Intent.RESERVATION_REQUEST and allergen_followup:
+            rule_intent = Intent.ALLERGEN_INQUIRY
+        # A short answer to "which item?" can itself be an unlisted dish.
+        if (session.awaiting_menu_intent and not rule_entities.menu_item_name
+                and rule_intent == Intent.UNKNOWN and re.fullmatch(r"[A-Za-z][A-Za-z '-]{1,80}[?.!]?", user_message.strip())):
+            rule_entities.menu_item_name = user_message.strip().rstrip("?.!")
+            rule_intent = session.awaiting_menu_intent
+        menu_cues = re.search(
+            r"\b(?:menu|dish(?:es)?|appetizers?|mains?|desserts?|beverages?|drinks?|"
+            r"ingredients?|recipe|allergens?|allerg(?:y|ic)|vegetarian|vegan|"
+            r"contain(?:s)?|made (?:of|with)|what is in|what's in|do you (?:have|serve)|how much|price|without|avoiding|free of|free from)\b|\b[a-z]+[ -]free\b", user_message, re.I)
+        if session.pending_intent != Intent.RESERVATION_REQUEST and (
+            (rule_intent == Intent.ALLERGEN_INQUIRY and allergen_followup)
+            or (menu_cues and rule_intent in (Intent.MENU_INQUIRY, Intent.INGREDIENT_INQUIRY, Intent.ALLERGEN_INQUIRY))
+            or (session.awaiting_menu_intent and rule_entities.menu_item_name)
+        ):
+            intent, entities = rule_intent, rule_entities
+        else:
+            intent, entities = self.extract_intent_and_entities(user_message, session)
 
         conn = create_connection(self.db_path)
         try:
+            menu_intents = (Intent.MENU_INQUIRY, Intent.INGREDIENT_INQUIRY, Intent.ALLERGEN_INQUIRY)
+            if session.awaiting_menu_intent and entities.menu_item_name and intent == Intent.MENU_INQUIRY:
+                answer = re.fullmatch(r"(?:the\s+|what about\s+)?" + re.escape(entities.menu_item_name) + r"(?:\s+please)?[?.!]*", user_message.strip(), re.I)
+                if answer:
+                    intent = session.awaiting_menu_intent
+            elif (intent in (Intent.INGREDIENT_INQUIRY, Intent.ALLERGEN_INQUIRY)
+                  and not entities.menu_item_name and session.last_menu_item
+                  and (allergen_followup or re.search(r"\b(?:it|its|that|this|those|same dish|what about)\b", user_message, re.I))):
+                entities.menu_item_name = session.last_menu_item
+
+            if intent in menu_intents:
+                if entities.menu_item_name:
+                    item = get_menu_item_by_name(conn, entities.menu_item_name)
+                    session.last_menu_item = item["name"] if item else None
+                    session.awaiting_menu_intent = None
+                elif intent == Intent.INGREDIENT_INQUIRY or (intent == Intent.ALLERGEN_INQUIRY and not entities.allergen_name):
+                    session.awaiting_menu_intent = intent
+                else:
+                    session.awaiting_menu_intent = None
+                if re.search(r"\b(?:vegetarian|vegan)\b", user_message, re.I):
+                    label = "vegan" if re.search(r"\bvegan\b", user_message, re.I) else "vegetarian"
+                    text = f"Our database does not have verified {label} classifications. Please ask restaurant staff before ordering."
+                    return AgentResult(text=text, intent=Intent.MENU_INQUIRY, entities=entities, is_fallback=True)
+            else:
+                session.awaiting_menu_intent = None
             if intent == Intent.GREETING:
                 return self._route_greeting(user_message, entities)
 
@@ -580,6 +672,12 @@ class AgentService:
         entities: ExtractedEntities
     ) -> AgentResult:
         """Query menu items, categories, or prices from database."""
+        # Category names are not unknown dishes, even in "do you have desserts?".
+        if entities.menu_item_name:
+            category_words = {name.lower() for name in get_menu_categories(conn)} | {"appetizer", "main", "dessert", "beverage", "drink", "drinks"}
+            if entities.menu_item_name.lower() in category_words:
+                entities.menu_item_name = None
+
         # 1. Specific dish lookup via get_menu_item_by_name
         if entities.menu_item_name:
             item = get_menu_item_by_name(conn, entities.menu_item_name)
@@ -590,35 +688,31 @@ class AgentService:
                 )
                 return AgentResult(text=text, intent=Intent.MENU_INQUIRY, entities=entities, is_fallback=True)
 
-            facts = (
-                f"Dish: {item['name']}\n"
-                f"Category: {item['category']}\n"
-                f"Price: ${item['price']:.2f}\n"
-                f"Description: {item['description']}\n"
-                f"Available: {'Yes' if item['is_available'] else 'No'}"
-            )
-            default_text = (
-                f"Our {item['name']} is {item['description']} "
-                f"It is available for ${item['price']:.2f}."
-            )
-            text = self._synthesize_voice_response(user_message, facts, default_text)
+            availability = "available" if item["is_available"] else "currently unavailable"
+            description = f" {item['description']}" if item["description"] else ""
+            text = f"Our {item['name']} is {availability} at ${item['price']:.2f}.{description}"
             return AgentResult(text=text, intent=Intent.MENU_INQUIRY, entities=entities, data=item)
 
-        # 2. General menu listing via get_menu_items
-        items = get_menu_items(conn, available_only=True)
         categories = get_menu_categories(conn)
-        sample_dishes = [f"{i['name']} (${i['price']:.2f})" for i in items[:4]]
+        # Match configured category names, plus common singular forms.
+        aliases = {"appetizer": "appetizers", "main": "mains", "dessert": "desserts",
+                   "beverage": "beverages", "drink": "beverages", "drinks": "beverages"}
+        category = next((name for name in categories if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", user_message, re.I)), None)
+        if not category:
+            words = set(re.findall(r"\b[a-z]+\b", user_message.lower()))
+            category = next((name for name in categories if any(word in words and target == name.lower() for word, target in aliases.items())), None)
+        items = get_menu_items(conn, category_name=category, available_only=True)
+        if category:
+            names = ", ".join(f"{item['name']} (${item['price']:.2f})" for item in items)
+            text = f"Our {category} include: {names}." if names else f"There are no currently available items in {category}."
+            return AgentResult(text=text, intent=Intent.MENU_INQUIRY, entities=entities, data={"category": category, "items": items})
 
-        facts = (
-            f"Categories: {', '.join(categories)}\n"
-            f"Sample Dishes: {', '.join(sample_dishes)}"
-        )
-        default_text = (
-            f"Our menu features {', '.join(categories)}. "
-            f"Popular dishes include {', '.join(sample_dishes)}. What would you like to hear more about?"
-        )
-        text = self._synthesize_voice_response(user_message, facts, default_text)
-        return AgentResult(text=text, intent=Intent.MENU_INQUIRY, entities=entities, data={"items": items})
+        sample_dishes = [f"{item['name']} (${item['price']:.2f})" for item in items[:4]]
+        text = f"Our menu features {', '.join(categories)}."
+        if sample_dishes:
+            text += f" Available dishes include {', '.join(sample_dishes)}."
+        text += " What would you like to hear more about?"
+        return AgentResult(text=text, intent=Intent.MENU_INQUIRY, entities=entities, data={"categories": categories, "items": items})
 
     def _route_ingredient_inquiry(
         self,
@@ -639,9 +733,10 @@ class AgentService:
             )
             return AgentResult(text=text, intent=Intent.INGREDIENT_INQUIRY, entities=entities, is_fallback=True)
 
-        facts = f"Item: {entities.menu_item_name}\nIngredients: {', '.join(ingredients)}"
-        default_text = f"The {entities.menu_item_name} is made with: {', '.join(ingredients)}."
-        text = self._synthesize_voice_response(user_message, facts, default_text)
+        if not ingredients:
+            text = f"I do not have ingredient records for {entities.menu_item_name}. Please ask restaurant staff."
+            return AgentResult(text=text, intent=Intent.INGREDIENT_INQUIRY, entities=entities, is_fallback=True, data={"ingredients": []})
+        text = f"The recorded ingredients for {entities.menu_item_name} are: {', '.join(ingredients)}."
         return AgentResult(text=text, intent=Intent.INGREDIENT_INQUIRY, entities=entities, data={"ingredients": ingredients})
 
     def _route_allergen_inquiry(
@@ -669,22 +764,28 @@ class AgentService:
                 )
                 return AgentResult(text=text, intent=Intent.ALLERGEN_INQUIRY, entities=entities, data=item, is_fallback=True)
 
-            # Verified dish
             allergens = item.get("allergens", [])
-            facts = (
-                f"Dish: {item['name']}\n"
-                f"Allergen Status: verified\n"
-                f"Verified Allergens: {', '.join(allergens) if allergens else 'None (free of tracked major allergens)'}"
-            )
-            if allergens:
-                text = f"The {item['name']} contains the following verified allergens: {', '.join(allergens)}."
+            if entities.allergen_name:
+                tracked = {row["name"].lower(): row["name"] for row in conn.execute("SELECT name FROM allergens")}
+                requested = tracked.get(entities.allergen_name.strip().lower())
+                if not requested or _ambiguous_allergen_request(user_message):
+                    text = "I cannot verify that allergen request from our records. Please specify one tracked allergen and check with restaurant staff."
+                    return AgentResult(text=text, intent=Intent.ALLERGEN_INQUIRY, entities=entities, data=item, is_fallback=True, needs_clarification=True)
+                present = requested.lower() in {name.lower() for name in allergens}
+                status = f"contains {requested}" if present else f"does not list {requested}"
+                text = f"Verified allergen records say {item['name']} {status}. Please check with restaurant staff about cross-contact before ordering."
+            elif allergens:
+                text = f"The {item['name']} contains the following verified allergens: {', '.join(allergens)}. Please check with staff about cross-contact."
             else:
-                text = f"The {item['name']} has verified allergen records and does not contain tracked major allergens."
-
+                text = f"The {item['name']} has verified allergen records and does not contain tracked major allergens. Please check with staff about cross-contact."
             return AgentResult(text=text, intent=Intent.ALLERGEN_INQUIRY, entities=entities, data=item)
 
         # Case B: Inquiring about safe dishes excluding an allergen
         if entities.allergen_name:
+            tracked = {row["name"].lower() for row in conn.execute("SELECT name FROM allergens")}
+            if entities.allergen_name.strip().lower() not in tracked or _ambiguous_allergen_request(user_message):
+                text = "I cannot verify that allergen request from our records. Please specify one tracked allergen and check with restaurant staff."
+                return AgentResult(text=text, intent=Intent.ALLERGEN_INQUIRY, entities=entities, is_fallback=True, needs_clarification=True)
             safe_items = find_safe_items_for_allergens(conn, [entities.allergen_name])
             if not safe_items:
                 text = (
@@ -695,8 +796,8 @@ class AgentService:
 
             dish_names = [d["name"] for d in safe_items[:4]]
             text = (
-                f"For guests avoiding {entities.allergen_name}, our verified safe options include: "
-                f"{', '.join(dish_names)}. Would you like details on any of these?"
+                f"For guests avoiding {entities.allergen_name}, verified records do not list it in: "
+                f"{', '.join(dish_names)}. Please check with staff about cross-contact before ordering."
             )
             return AgentResult(text=text, intent=Intent.ALLERGEN_INQUIRY, entities=entities, data={"safe_items": safe_items})
 
@@ -714,7 +815,7 @@ class AgentService:
     ) -> AgentResult:
         """Check table availability via find_available_tables without creating bookings."""
         party_size = entities.number_of_guests or 2
-        res_date = entities.requested_reservation_date or date.today().strftime("%Y-%m-%d")
+        res_date = entities.requested_reservation_date or restaurant_today().strftime("%Y-%m-%d")
         res_time = entities.requested_reservation_time
 
         if not res_time:
@@ -810,17 +911,24 @@ class AgentService:
             session.slots["requested_reservation_date"] = None
             return AgentResult(text=text, intent=Intent.RESERVATION_REQUEST, entities=entities, needs_clarification=True)
 
-        if parsed_date < date.today():
+        if parsed_date < restaurant_today():
             text = (
                 f"'{res_date}' is in the past. Please provide a future date for your reservation."
             )
             session.slots["requested_reservation_date"] = None
             return AgentResult(text=text, intent=Intent.RESERVATION_REQUEST, entities=entities, needs_clarification=True)
 
-        if len(re.sub(r"[^\d]", "", phone)) < 7:
-            text = "Please provide a valid phone number with at least 7 digits."
+        try:
+            validate_indian_mobile(phone)
+        except ValueError as exc:
             session.slots["customer_phone"] = None
-            return AgentResult(text=text, intent=Intent.RESERVATION_REQUEST, entities=entities, needs_clarification=True)
+            return AgentResult(text=str(exc), intent=Intent.RESERVATION_REQUEST, entities=entities, needs_clarification=True)
+
+        try:
+            validate_reservation_slot(res_date, res_time)
+        except ValueError as exc:
+            session.slots["requested_reservation_time"] = None
+            return AgentResult(text=str(exc), intent=Intent.RESERVATION_REQUEST, entities=entities, needs_clarification=True)
 
         # Execute create_reservation
         try:

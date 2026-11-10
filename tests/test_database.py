@@ -18,6 +18,7 @@ import unittest
 import uuid
 from pathlib import Path
 
+from src.core.reservation_policy import restaurant_today
 from src.core.config import config
 from src.database.connection import create_connection
 from src.database.init_db import init_database
@@ -76,7 +77,7 @@ class TestDatabaseLayer(unittest.TestCase):
             cursor.execute(
                 """
                 INSERT INTO reservations (table_id, customer_name, customer_phone, party_size, reservation_date, reservation_time)
-                VALUES (99999, 'John Doe', '555-0100', 2, '2026-11-15', '18:00');
+                VALUES (99999, 'John Doe', '9870000100', 2, '2026-11-15', '18:00');
                 """
             )
 
@@ -184,7 +185,7 @@ class TestDatabaseLayer(unittest.TestCase):
         tables = find_available_tables(
             self.conn,
             party_size=2,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="18:00"
         )
         self.assertTrue(len(tables) > 0)
@@ -195,7 +196,7 @@ class TestDatabaseLayer(unittest.TestCase):
         tables = find_available_tables(
             self.conn,
             party_size=20,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="18:00"
         )
         self.assertEqual(len(tables), 0)
@@ -208,9 +209,9 @@ class TestDatabaseLayer(unittest.TestCase):
         res = create_reservation(
             self.conn,
             customer_name="Alice Smith",
-            customer_phone="555-0199",
+            customer_phone="9870000199",
             party_size=4,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="19:00"
         )
         self.assertIsNotNone(res["reservation_id"])
@@ -229,18 +230,18 @@ class TestDatabaseLayer(unittest.TestCase):
         res1 = create_reservation(
             self.conn,
             customer_name="Customer One",
-            customer_phone="555-0101",
+            customer_phone="9870000101",
             party_size=2,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="18:00",
             duration_minutes=90
         )
         res2 = create_reservation(
             self.conn,
             customer_name="Customer Two",
-            customer_phone="555-0102",
+            customer_phone="9870000102",
             party_size=2,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="18:00",
             duration_minutes=90
         )
@@ -249,9 +250,9 @@ class TestDatabaseLayer(unittest.TestCase):
         res3 = create_reservation(
             self.conn,
             customer_name="Customer Three",
-            customer_phone="555-0103",
+            customer_phone="9870000103",
             party_size=2,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="18:30",
             duration_minutes=90
         )
@@ -267,9 +268,9 @@ class TestDatabaseLayer(unittest.TestCase):
         res1 = create_reservation(
             self.conn,
             customer_name="Early Bird",
-            customer_phone="555-0201",
+            customer_phone="9870000201",
             party_size=6,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="18:00",
             duration_minutes=60
         )
@@ -278,9 +279,9 @@ class TestDatabaseLayer(unittest.TestCase):
         res2 = create_reservation(
             self.conn,
             customer_name="Late Diner",
-            customer_phone="555-0202",
+            customer_phone="9870000202",
             party_size=6,
-            reservation_date="2026-11-20",
+            reservation_date=(restaurant_today() + timedelta(days=1)).isoformat(),
             reservation_time="19:00",
             duration_minutes=60
         )
@@ -294,9 +295,9 @@ class TestDatabaseLayer(unittest.TestCase):
         create_reservation(
             self.conn,
             customer_name="Host",
-            customer_phone="555-0301",
+            customer_phone="9870000301",
             party_size=8,
-            reservation_date="2026-11-21",
+            reservation_date=(restaurant_today() + timedelta(days=2)).isoformat(),
             reservation_time="18:00",
             duration_minutes=60  # Only booked 18:00 - 19:00
         )
@@ -305,7 +306,7 @@ class TestDatabaseLayer(unittest.TestCase):
         avail_60 = find_available_tables(
             self.conn,
             party_size=8,
-            reservation_date="2026-11-21",
+            reservation_date=(restaurant_today() + timedelta(days=2)).isoformat(),
             reservation_time="19:00",
             duration_minutes=60
         )
@@ -315,7 +316,7 @@ class TestDatabaseLayer(unittest.TestCase):
         avail_90 = find_available_tables(
             self.conn,
             party_size=8,
-            reservation_date="2026-11-21",
+            reservation_date=(restaurant_today() + timedelta(days=2)).isoformat(),
             reservation_time="19:00",
             duration_minutes=90
         )
@@ -325,14 +326,14 @@ class TestDatabaseLayer(unittest.TestCase):
     # 7. Operating Hours & Input Validation Tests
     # -----------------------------------------------------------------------
     def test_reservation_outside_operating_hours(self):
-        """Reservations before opening (11:00) or after closing (22:00) must be rejected."""
+        """Reservations outside configured operating hours must be rejected."""
         with self.assertRaises(ValueError) as ctx:
             create_reservation(
                 self.conn,
                 customer_name="Early Bird",
-                customer_phone="555-0401",
+                customer_phone="9870000401",
                 party_size=2,
-                reservation_date="2026-11-22",
+                reservation_date=(restaurant_today() + timedelta(days=3)).isoformat(),
                 reservation_time="08:00"
             )
         self.assertIn("operating hours", str(ctx.exception))
@@ -340,13 +341,13 @@ class TestDatabaseLayer(unittest.TestCase):
     def test_invalid_customer_inputs(self):
         """Empty names, invalid phones, or negative party sizes must be rejected."""
         with self.assertRaises(ValueError):
-            create_reservation(self.conn, "", "555-0501", 2, "2026-11-22", "18:00")
+            create_reservation(self.conn, "", "9870000501", 2, (restaurant_today() + timedelta(days=3)).isoformat(), "18:00")
             
         with self.assertRaises(ValueError):
-            create_reservation(self.conn, "Valid Name", "123", 2, "2026-11-22", "18:00")
+            create_reservation(self.conn, "Valid Name", "123", 2, (restaurant_today() + timedelta(days=3)).isoformat(), "18:00")
             
         with self.assertRaises(ValueError):
-            create_reservation(self.conn, "Valid Name", "555-0502", 0, "2026-11-22", "18:00")
+            create_reservation(self.conn, "Valid Name", "9870000502", 0, (restaurant_today() + timedelta(days=3)).isoformat(), "18:00")
 
     # -----------------------------------------------------------------------
     # 8. Cancellation Tests
@@ -356,9 +357,9 @@ class TestDatabaseLayer(unittest.TestCase):
         res = create_reservation(
             self.conn,
             customer_name="Cancel Candidate",
-            customer_phone="555-0601",
+            customer_phone="9870000601",
             party_size=8,
-            reservation_date="2026-11-23",
+            reservation_date=(restaurant_today() + timedelta(days=4)).isoformat(),
             reservation_time="18:00"
         )
         
@@ -366,7 +367,7 @@ class TestDatabaseLayer(unittest.TestCase):
         avail_before = find_available_tables(
             self.conn,
             party_size=8,
-            reservation_date="2026-11-23",
+            reservation_date=(restaurant_today() + timedelta(days=4)).isoformat(),
             reservation_time="18:00"
         )
         self.assertEqual(len(avail_before), 0)
@@ -379,7 +380,7 @@ class TestDatabaseLayer(unittest.TestCase):
         avail_after = find_available_tables(
             self.conn,
             party_size=8,
-            reservation_date="2026-11-23",
+            reservation_date=(restaurant_today() + timedelta(days=4)).isoformat(),
             reservation_time="18:00"
         )
         self.assertEqual(len(avail_after), 1)

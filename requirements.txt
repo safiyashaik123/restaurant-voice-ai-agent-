@@ -1,3 +1,6 @@
+# IANA timezone data (required by zoneinfo on Windows)
+tzdata>=2024.1
+
 # FastAPI backend and server
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0

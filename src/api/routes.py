@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 
+from src.core.reservation_policy import PHONE_ERROR, SLOT_ERROR, parse_reservation_date, reservation_slots
 from src.api.orchestration import EmptyUpload, UploadTooLarge
 from src.api.schemas import ChatRequest, ChatResponse, HealthResponse, MenuResponse, ReservationRequest, ReservationResponse
 from src.services.stt_service import EmptyTranscriptionError, InvalidAudioError, STTError
@@ -32,6 +33,14 @@ def menu(request: Request, category: Optional[str] = Query(default=None, max_len
     return request.app.state.backend.menu(category)
 
 
+@router.get("/reservations/slots")
+def slots(date: str = Query(...)):
+    try:
+        return {"date": date, "slots": reservation_slots(parse_reservation_date(date))}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/reservations", response_model=ReservationResponse, status_code=201)
 def reserve(payload: ReservationRequest, request: Request):
     try:
@@ -39,7 +48,8 @@ def reserve(payload: ReservationRequest, request: Request):
     except ValueError as exc:
         if str(exc).startswith("No tables available"):
             raise HTTPException(status_code=409, detail="No table is available for that request") from exc
-        raise HTTPException(status_code=422, detail="Invalid reservation details") from exc
+        detail = str(exc) if str(exc) in (PHONE_ERROR, SLOT_ERROR) else "Invalid reservation details"
+        raise HTTPException(status_code=422, detail=detail) from exc
 
 
 @router.post("/voice", response_class=Response, responses={200: {"content": {"audio/wav": {"schema": {"type": "string", "format": "binary"}}}}})

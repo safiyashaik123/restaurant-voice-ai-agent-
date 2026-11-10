@@ -13,6 +13,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from src.core.config import config
+from src.core.reservation_policy import validate_indian_mobile, validate_reservation_slot
 
 
 def _normalize_name(name: str) -> str:
@@ -188,6 +189,9 @@ def find_safe_items_for_allergens(
       ensuring unverified information is never treated as confirmed absence of allergens.
     """
     clean_allergens = [a.strip().lower() for a in excluded_allergens if a.strip()]
+    tracked = {row["name"].lower() for row in conn.execute("SELECT name FROM allergens")}
+    if any(name not in tracked for name in clean_allergens):
+        raise ValueError("Allergen is not tracked in the restaurant database.")
     
     if not clean_allergens:
         # If no allergens excluded, return all available verified items
@@ -355,26 +359,52 @@ def create_reservation(
     reservation_time: str,
     duration_minutes: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Deterministically validate and insert a confirmed reservation."""
+    """Reserve atomically, committing only transactions opened by this function.
+
+    When a transaction is already active, its caller owns commit and rollback;
+    the caller should acquire an immediate write transaction before booking and
+    must not report confirmation until it has committed.
+    """
+    owns_transaction = not conn.in_transaction
+    if owns_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        result = _create_reservation_in_transaction(
+            conn, customer_name, customer_phone, party_size,
+            reservation_date, reservation_time, duration_minutes,
+        )
+        if owns_transaction:
+            conn.execute("COMMIT")
+        return result
+    except Exception:
+        if owns_transaction and conn.in_transaction:
+            conn.execute("ROLLBACK")
+        raise
+
+
+def _create_reservation_in_transaction(
+    conn: sqlite3.Connection,
+    customer_name: str,
+    customer_phone: str,
+    party_size: int,
+    reservation_date: str,
+    reservation_time: str,
+    duration_minutes: Optional[int] = None
+) -> Dict[str, Any]:
+    """Validate, allocate and insert while a transaction is active."""
     # 1. Input sanitization & validation
     name_clean = customer_name.strip()
-    phone_clean = re.sub(r"[^\d+ -]", "", customer_phone.strip())
-    
+
     if not name_clean:
         raise ValueError("Customer name cannot be empty.")
-    if len(phone_clean) < 7:
-        raise ValueError("Customer phone number must contain at least 7 digits.")
+    phone_clean = validate_indian_mobile(customer_phone)
     if party_size <= 0:
         raise ValueError("Party size must be a positive integer.")
         
     slot_duration = duration_minutes if duration_minutes is not None else config.default_reservation_duration_minutes
     
-    # Validate operating hours
-    if not _is_within_operating_hours(reservation_time, slot_duration):
-        raise ValueError(
-            f"Requested time {reservation_time} is outside restaurant operating hours "
-            f"({config.opening_time} to {config.closing_time})."
-        )
+    # Validate date, interval and operating hours against the shared policy.
+    validate_reservation_slot(reservation_date, reservation_time, duration_minutes=slot_duration)
         
     # 2. Check table availability
     available_tables = find_available_tables(

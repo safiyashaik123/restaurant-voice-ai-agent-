@@ -10,6 +10,7 @@ Verifies end-to-end conversation flow:
 from datetime import date, timedelta
 import unittest
 
+from src.core.reservation_policy import restaurant_today
 from src.core.config import config
 from src.services.agent_service import AgentService, Intent
 from src.services.llm_service import OllamaService
@@ -60,7 +61,7 @@ class TestAgentIntegration(unittest.TestCase):
 
     def test_live_availability_check(self):
         """Live table availability check."""
-        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
         res = self.agent.handle_message(f"Do you have a table for 2 on {tomorrow_str} at 19:00?")
         self.assertEqual(res.intent, Intent.AVAILABILITY_INQUIRY)
         self.assertFalse(res.needs_clarification)

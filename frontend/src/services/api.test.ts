@@ -30,7 +30,7 @@ describe('API contracts', () => {
   it('sends the reservation contract unchanged', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 201 }))
     vi.stubGlobal('fetch', fetch)
-    const payload = { customer_name: 'Alex', customer_phone: '555-1234', party_size: 2, reservation_date: '2030-05-12', reservation_time: '18:00' }
+    const payload = { customer_name: 'Alex', customer_phone: '9870001234', party_size: 2, reservation_date: '2030-05-12', reservation_time: '18:00' }
     await api.reserve(payload)
     expect(fetch).toHaveBeenCalledWith('/api/reservations', expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
   })

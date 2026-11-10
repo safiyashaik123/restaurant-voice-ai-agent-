@@ -138,3 +138,21 @@
 | **DEC-013** | Direct Grounded Allergen Delivery     | Deliver verified SQLite allergen facts directly to caller without LLM re-synthesis  | Prevents local LLMs from hallucinating negations (e.g. inverting "contains gluten" to "gluten-free") during natural language generation for critical food safety inquiries. |
 | **DEC-014** | In-Memory Session Slot Filling        | `InteractionState` class scoped per interaction session                             | Preserves pending booking parameters (date, time, party size, name, phone) across conversational turns without requiring external database state.                           |
 | **DEC-015** | Session Idle TTL                      | `last_activity_at` with a configurable 30-minute idle timeout                       | Expires inactive sessions while preserving active customer conversations and their pending reservation details.                                                             |
+
+### Phase 6: reservation policy (in progress)
+
+Added shared Indian-mobile and configured-hours/30-minute slot validation, a date-based slots endpoint, and form integration without redesign. Defaults are 10:00–23:00 with the existing 90-minute reservation duration (last start 21:30). Asia/Kolkata (IST) determines whether a slot is past, independently of server or browser timezone. Slot results describe policy, not table availability. Existing transaction ownership and atomic booking changes are included for review. Streaming and STT evaluation are not part of this stage.
+
+Verification in the sandbox: backend `pytest tests/ -q` passed 134 tests, with 8 live-Ollama tests skipped and 15 subtests passed; frontend Vitest passed 10 tests and the production build succeeded. Browser interaction and Windows/model integration were not verified in this stage.
+
+### Phase 6: Stage 3 — grounded menu conversations
+
+Inspected the SQLite schema and seed records: there is no verified vegetarian/vegan classification, so dietary discovery honestly refers guests to staff without inventing labels or altering existing database records. Menu and ingredient answers now use deterministic database text; category inquiries list matching available items, and unknown or missing records are acknowledged. Allergen responses distinguish mapped presence, recorded absence for tracked allergens, and unknown/unverified information; ambiguous or multi-allergen requests are not partially filtered, and cross-contact requires staff confirmation. Session-scoped dish context supports follow-ups, and clear menu requests avoid model calls; ambiguous intent extraction retains the configured Qwen model. No UI, STT, or streaming changes were made in this stage.
+
+Stage 3 sandbox verification: 96 focused menu/agent/database/API tests passed; the full backend suite passed 155 tests with 8 live-Ollama tests skipped and 15 subtests passed. Live Qwen interpretation remains unverified in this sandbox.
+
+### Phase 6: Stage 4 — English speech recognition
+
+STT remains faster-whisper with `tiny.en`/CPU/int8 by default, locally cached and lazily loaded once per service. Recognition now explicitly requests English transcription, with configurable positive `WHISPER_BEAM_SIZE` (default 5) and `WHISPER_VAD_FILTER` (default false); `base.en` is an opt-in model. Faster-whisper's PyAV decoder is used once to produce 16 kHz mono audio before inference. No-sample and digitally silent input are rejected before model load; other silence remains subject to model/VAD behavior. The voice API and Piper contract are unchanged. `API.md` contains explicit Windows download and same-recording, separate-process A/B WER/time benchmark instructions; `scripts/benchmark_stt.py` performs the local comparison without downloads. No real model accuracy, latency, or Windows 8 GB RAM benchmark was measured in this sandbox.
+
+Stage 4 sandbox verification: 50 focused STT/benchmark/API tests passed (plus 2 subtests); the full backend suite passed 167 tests, with 8 live-Ollama tests skipped and 15 subtests passed. Frontend Vitest passed 10 tests and the production build succeeded. Audio-decoding tests used generated WAV samples and mocked Whisper inference; no real-model or Windows benchmark was performed.

@@ -30,6 +30,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 import uuid
 
+from src.core.reservation_policy import restaurant_today
 from src.core.config import config
 from src.database.connection import create_connection
 from src.database.init_db import init_database
@@ -245,7 +246,7 @@ class TestAgentServiceUnit(unittest.TestCase):
     def test_reservation_slot_filling_step_by_step(self):
         """Test step-by-step slot filling asking ONLY for missing parameters."""
         session_id = "slot_fill_test_session"
-        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Step 1: Initial request without slots
         r1 = self.agent.handle_message("I want to book a table.", session_id=session_id)
@@ -274,7 +275,7 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.assertIn("phone number", r5.text)
 
         # Step 6: Provide phone number -> Validates in Python, calls CRUD, confirms booking!
-        r6 = self.agent.handle_message("Phone is 555-9876", session_id=session_id)
+        r6 = self.agent.handle_message("Phone is 9870009876", session_id=session_id)
         self.assertEqual(r6.intent, Intent.RESERVATION_REQUEST)
         self.assertFalse(r6.needs_clarification)
         self.assertTrue(r6.success)
@@ -285,8 +286,8 @@ class TestAgentServiceUnit(unittest.TestCase):
 
     def test_reservation_success_only_after_database_creation(self):
         """Verify reservation success message is emitted ONLY after DB insert succeeds."""
-        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
-        msg = f"Book table for 2 on {tomorrow_str} at 18:00 under John, phone 555-0199"
+        tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        msg = f"Book table for 2 on {tomorrow_str} at 18:00 under John, phone 9870000199"
 
         res = self.agent.handle_message(msg, session_id="atomic_create_test")
         self.assertTrue(res.success)
@@ -304,7 +305,7 @@ class TestAgentServiceUnit(unittest.TestCase):
     def test_reservation_invalid_phone_fails_validation_in_python(self):
         """Short phone numbers are caught and rejected before reaching database."""
         session_id = "phone_val_test"
-        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
         
         # Prime session with other slots
         state = self.agent.get_session(session_id)
@@ -320,22 +321,22 @@ class TestAgentServiceUnit(unittest.TestCase):
         # Provide invalid phone (< 7 digits)
         res = self.agent.handle_message("My phone is 123", session_id=session_id)
         self.assertTrue(res.needs_clarification)
-        self.assertIn("at least 7 digits", res.text)
+        self.assertIn("valid Indian mobile", res.text)
 
     def test_reservation_conflict_returns_clear_failure_message(self):
         """When all tables of requested size are booked, returns clear unavailable message."""
-        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Table T6 is the only 8-person table. Book it at 18:00.
         r1 = self.agent.handle_message(
-            f"Reserve a table for 8 on {tomorrow_str} at 18:00 under HostA, phone 555-1111",
+            f"Reserve a table for 8 on {tomorrow_str} at 18:00 under HostA, phone 9870001111",
             session_id="booking_a"
         )
         self.assertTrue(r1.success)
 
         # Attempt to book another party of 8 at the same time
         r2 = self.agent.handle_message(
-            f"Reserve a table for 8 on {tomorrow_str} at 18:00 under HostB, phone 555-2222",
+            f"Reserve a table for 8 on {tomorrow_str} at 18:00 under HostB, phone 9870002222",
             session_id="booking_b"
         )
         self.assertFalse(r2.success)
@@ -347,9 +348,9 @@ class TestAgentServiceUnit(unittest.TestCase):
     # -----------------------------------------------------------------------
     def test_reservation_cancellation_success(self):
         """Cancelling an existing reservation frees table and confirms cancellation."""
-        tomorrow_str = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
         book_res = self.agent.handle_message(
-            f"Book table for 2 on {tomorrow_str} at 18:00 under Emily, phone 555-3333",
+            f"Book table for 2 on {tomorrow_str} at 18:00 under Emily, phone 9870003333",
             session_id="cancel_setup"
         )
         res_id = book_res.data["reservation_id"]
@@ -394,7 +395,7 @@ class TestAgentServiceUnit(unittest.TestCase):
     def test_reservation_past_date_rejected_in_python(self):
         """A past date must be rejected with needs_clarification before reaching the DB."""
         session_id = "past_date_test"
-        yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+        yesterday = (restaurant_today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
         state = self.agent.get_session(session_id)
         state.pending_intent = Intent.RESERVATION_REQUEST
@@ -403,7 +404,7 @@ class TestAgentServiceUnit(unittest.TestCase):
             "requested_reservation_time": "19:00",
             "number_of_guests": 2,
             "customer_name": "Alice",
-            "customer_phone": "555-1234567",
+            "customer_phone": "9871234567",
         }
 
         res = self.agent.handle_message("confirm my booking please", session_id=session_id)
@@ -415,7 +416,7 @@ class TestAgentServiceUnit(unittest.TestCase):
     def test_reservation_today_accepted(self):
         """Today's date should not be rejected as a past date."""
         session_id = "today_date_test"
-        today = date.today().strftime("%Y-%m-%d")
+        today = restaurant_today().strftime("%Y-%m-%d")
 
         state = self.agent.get_session(session_id)
         state.pending_intent = Intent.RESERVATION_REQUEST
@@ -424,7 +425,7 @@ class TestAgentServiceUnit(unittest.TestCase):
             "requested_reservation_time": "19:00",
             "number_of_guests": 2,
             "customer_name": "Bob",
-            "customer_phone": "555-9876543",
+            "customer_phone": "9879876543",
         }
 
         res = self.agent.handle_message("confirm my booking please", session_id=session_id)
@@ -434,7 +435,7 @@ class TestAgentServiceUnit(unittest.TestCase):
     def test_reservation_empty_name_rejected_in_python(self):
         """An empty string name must be rejected with needs_clarification."""
         session_id = "empty_name_test"
-        tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
         state = self.agent.get_session(session_id)
         state.pending_intent = Intent.RESERVATION_REQUEST
@@ -443,7 +444,7 @@ class TestAgentServiceUnit(unittest.TestCase):
             "requested_reservation_time": "19:00",
             "number_of_guests": 2,
             "customer_name": "",
-            "customer_phone": "555-1234567",
+            "customer_phone": "9871234567",
         }
 
         res = self.agent.handle_message("confirm my booking", session_id=session_id)
@@ -454,7 +455,7 @@ class TestAgentServiceUnit(unittest.TestCase):
     def test_reservation_whitespace_only_name_rejected_in_python(self):
         """A whitespace-only name must be rejected the same as an empty name."""
         session_id = "whitespace_name_test"
-        tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
 
         state = self.agent.get_session(session_id)
         state.pending_intent = Intent.RESERVATION_REQUEST
@@ -463,7 +464,7 @@ class TestAgentServiceUnit(unittest.TestCase):
             "requested_reservation_time": "19:00",
             "number_of_guests": 2,
             "customer_name": "   ",
-            "customer_phone": "555-1234567",
+            "customer_phone": "9871234567",
         }
 
         res = self.agent.handle_message("confirm my booking", session_id=session_id)
@@ -472,13 +473,13 @@ class TestAgentServiceUnit(unittest.TestCase):
 
     def test_cancellation_success_clears_session(self):
         """After a successful cancellation the session state must be cleared."""
-        tomorrow = (date.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+        tomorrow = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
         book_session = "cancel_clear_book"
         cancel_session = "cancel_clear_cancel"
 
         # Create a reservation
         book_res = self.agent.handle_message(
-            f"Book table for 2 on {tomorrow} at 18:00 under Diana, phone 555-7777",
+            f"Book table for 2 on {tomorrow} at 18:00 under Diana, phone 9870007777",
             session_id=book_session,
         )
         self.assertTrue(book_res.success)

@@ -41,15 +41,16 @@ def create_connection(db_path: Optional[Path | str] = None) -> sqlite3.Connectio
 
 
 @contextmanager
-def get_db(db_path: Optional[Path | str] = None) -> Iterator[sqlite3.Connection]:
+def get_db(db_path: Optional[Path | str] = None, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
     """Context manager yielding a transactional SQLite connection."""
     conn = create_connection(db_path)
     try:
-        conn.execute("BEGIN;")
+        conn.execute("BEGIN IMMEDIATE;" if immediate else "BEGIN;")
         yield conn
         conn.execute("COMMIT;")
     except Exception:
-        conn.execute("ROLLBACK;")
+        if conn.in_transaction:
+            conn.execute("ROLLBACK;")
         raise
     finally:
         conn.close()

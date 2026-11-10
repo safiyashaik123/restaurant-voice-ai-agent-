@@ -25,6 +25,7 @@ export const api = {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, session_id: sessionId }),
   })).json() as Promise<ChatResponse>,
   menu: async (category?: string) => (await request(`/menu${category ? `?category=${encodeURIComponent(category)}` : ''}`)).json() as Promise<MenuResponse>,
+  reservationSlots: async (date: string) => (await request(`/reservations/slots?date=${encodeURIComponent(date)}`)).json() as Promise<{ date: string; slots: string[] }>,
   reserve: async (details: ReservationRequest) => (await request('/reservations', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(details),
   })).json() as Promise<ReservationResponse>,

@@ -7,6 +7,7 @@ Designed to be dependency-free so it can be loaded in any Python environment.
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+from typing import ClassVar
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -23,11 +24,12 @@ class AppConfig:
     db_path: Path = field(default_factory=lambda: BASE_DIR / "data" / "restaurant.db")
     
     # Reservation configuration (configurable per restaurant policy)
+    restaurant_timezone: ClassVar[str] = "Asia/Kolkata"
     default_reservation_duration_minutes: int = int(
         os.environ.get("RESERVATION_DURATION_MINUTES", "90")
     )
-    opening_time: str = os.environ.get("RESTAURANT_OPENING_TIME", "11:00")
-    closing_time: str = os.environ.get("RESTAURANT_CLOSING_TIME", "22:00")
+    opening_time: str = os.environ.get("RESTAURANT_OPENING_TIME", "10:00")
+    closing_time: str = os.environ.get("RESTAURANT_CLOSING_TIME", "23:00")
     
     # Local LLM settings (Ollama)
     ollama_base_url: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -50,6 +52,27 @@ class AppConfig:
     )
 
     whisper_device: str = os.environ.get("WHISPER_DEVICE", "cpu")
+
+    @property
+    def whisper_beam_size(self) -> int:
+        """Beam width for English transcription (faster-whisper default: 5)."""
+        try:
+            value = int(os.environ.get("WHISPER_BEAM_SIZE", "5"))
+        except ValueError as exc:
+            raise ValueError("WHISPER_BEAM_SIZE must be a positive integer") from exc
+        if value < 1:
+            raise ValueError("WHISPER_BEAM_SIZE must be a positive integer")
+        return value
+
+    @property
+    def whisper_vad_filter(self) -> bool:
+        """Optional voice activity filtering; disabled by default for short speech."""
+        value = os.environ.get("WHISPER_VAD_FILTER", "false").strip().lower()
+        if value in ("true", "1", "yes", "on"):
+            return True
+        if value in ("false", "0", "no", "off"):
+            return False
+        raise ValueError("WHISPER_VAD_FILTER must be true or false")
 
     @property
     def api_allowed_origins(self) -> list[str]:

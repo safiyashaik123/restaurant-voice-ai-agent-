@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+import numpy as np
 from av.error import InvalidDataError
 
 from src.core.config import AppConfig, config
@@ -36,6 +37,9 @@ class TestSTTService(unittest.TestCase):
         self.mock_audio_open = audio_open.start()
         self.mock_audio_open.return_value.__enter__.return_value.streams.audio = [object()]
         self.addCleanup(audio_open.stop)
+        audio_decode = patch("src.services.stt_service.decode_audio", return_value=np.array([0.1], dtype=np.float32))
+        self.mock_audio_decode = audio_decode.start()
+        self.addCleanup(audio_decode.stop)
 
     def test_config_preserves_existing_positional_field_order(self):
         self.assertEqual(
@@ -64,7 +68,11 @@ class TestSTTService(unittest.TestCase):
         self.mock_model_lookup.assert_called_once_with("tiny.en", local_files_only=True)
         model_class.assert_called_once_with(str(self.model_dir), device="cpu", compute_type="int8", local_files_only=True)
         self.assertEqual(model.transcribe.call_count, 2)
-        model.transcribe.assert_called_with(str(self.audio_path))
+        args, kwargs = model.transcribe.call_args
+        np.testing.assert_array_equal(args[0], np.array([0.1], dtype=np.float32))
+        self.assertEqual(kwargs, {"language": "en", "task": "transcribe", "beam_size": 5, "vad_filter": False})
+        self.assertEqual(self.mock_audio_decode.call_count, 2)
+        self.mock_audio_decode.assert_called_with(str(self.audio_path), sampling_rate=16000)
 
     @patch("src.services.stt_service.WhisperModel")
     def test_explicit_configuration(self, model_class):

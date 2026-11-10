@@ -64,7 +64,7 @@ class APIBackend:
     def reserve(self, values: dict) -> dict:
         # Exit the transaction context (and commit) before returning confirmation.
         with self._agent_and_booking_lock:
-            with get_db(self.db_path) as conn:
+            with get_db(self.db_path, immediate=True) as conn:
                 reservation = create_reservation(conn, **values)
         return reservation
 

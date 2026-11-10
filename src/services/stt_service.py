@@ -6,8 +6,10 @@ from typing import Optional, Union
 import os
 
 import av
+import numpy as np
 from av.error import FFmpegError
 from faster_whisper import WhisperModel
+from faster_whisper.audio import decode_audio
 from faster_whisper.utils import download_model
 
 from src.core.config import config
@@ -49,10 +51,18 @@ class STTService:
         model_name: Optional[str] = None,
         device: Optional[str] = None,
         compute_type: Optional[str] = None,
+        beam_size: Optional[int] = None,
+        vad_filter: Optional[bool] = None,
     ) -> None:
         self.model_name = model_name if model_name is not None else config.whisper_model_size
         self.device = device if device is not None else config.whisper_device
         self.compute_type = compute_type if compute_type is not None else config.whisper_compute_type
+        self.beam_size = beam_size if beam_size is not None else config.whisper_beam_size
+        self.vad_filter = vad_filter if vad_filter is not None else config.whisper_vad_filter
+        if isinstance(self.beam_size, bool) or not isinstance(self.beam_size, int) or self.beam_size < 1:
+            raise ValueError("beam_size must be a positive integer")
+        if not isinstance(self.vad_filter, bool):
+            raise ValueError("vad_filter must be a boolean")
         self._model: Optional[WhisperModel] = None
         self._model_lock = Lock()
 
@@ -98,9 +108,23 @@ class STTService:
         except Exception as exc:
             raise TranscriptionError(f"Could not inspect audio file {path}: {exc}") from exc
 
+        # Use faster-whisper's decoder once: it downmixes channels and resamples
+        # to the model's expected 16 kHz mono PCM without extra processing.
+        try:
+            audio = decode_audio(str(path), sampling_rate=16000)
+        except (FFmpegError, EOFError, ValueError) as exc:
+            raise InvalidAudioError(f"Could not decode audio file {path}: {exc}") from exc
+        except Exception as exc:
+            raise TranscriptionError(f"Could not decode audio file {path}: {exc}") from exc
+        if audio.size == 0:
+            raise InvalidAudioError(f"Audio file contains no decodable samples: {path}")
+        if not np.any(audio):
+            raise EmptyTranscriptionError(f"No speech was recognized in silent audio file: {path}")
+
         model = self._get_model()
         try:
-            segments, _ = model.transcribe(str(path))
+            segments, _ = model.transcribe(audio, language="en", task="transcribe",
+                                           beam_size=self.beam_size, vad_filter=self.vad_filter)
             # faster-whisper returns a lazy iterator: errors may occur here too.
             text = " ".join(segment.text.strip() for segment in segments if segment.text.strip())
         except (FFmpegError, EOFError) as exc:
