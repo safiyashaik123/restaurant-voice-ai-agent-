@@ -35,7 +35,7 @@ class AppConfig:
     ollama_timeout_seconds: float = float(os.environ.get("OLLAMA_TIMEOUT_SECONDS", "30.0"))
     
     # STT & TTS settings
-    whisper_model_size: str = os.environ.get("WHISPER_MODEL_SIZE", "base.en")
+    whisper_model_size: str = os.environ.get("WHISPER_MODEL_SIZE", "tiny.en")
     whisper_compute_type: str = os.environ.get("WHISPER_COMPUTE_TYPE", "int8")
     piper_model_name: str = os.environ.get("PIPER_MODEL_NAME", "en_US-lessac-medium")
     
@@ -48,6 +48,8 @@ class AppConfig:
         "I am currently experiencing technical difficulties. "
         "Please let a team member know so we can assist you right away."
     )
+
+    whisper_device: str = os.environ.get("WHISPER_DEVICE", "cpu")
 
 
 # Singleton instance
