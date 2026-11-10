@@ -1,0 +1,20 @@
+# Web & API Framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+python-multipart>=0.0.9
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+
+# HTTP Client for Ollama REST API
+httpx>=0.27.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+
+# Speech to Text & Text to Speech (Phases 3 & 4)
+# Note: faster-whisper and audio processing dependencies
+faster-whisper>=1.0.0
+piper-tts>=1.2.0
+soundfile>=0.12.1
+numpy>=1.24.0

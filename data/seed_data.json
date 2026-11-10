@@ -1,0 +1,271 @@
+{
+  "categories": [
+    "Appetizers",
+    "Mains",
+    "Desserts",
+    "Beverages"
+  ],
+  "allergens": [
+    "Gluten",
+    "Dairy",
+    "Eggs",
+    "Fish",
+    "Shellfish",
+    "Tree Nuts",
+    "Peanuts",
+    "Soy",
+    "Sesame"
+  ],
+  "menu_items": [
+    {
+      "name": "Bruschetta Classica",
+      "category": "Appetizers",
+      "description": "Toasted artisan sourdough bread topped with ripe Roma tomatoes, garlic, extra virgin olive oil, and fresh basil.",
+      "price": 9.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Artisan sourdough bread",
+        "Roma tomatoes",
+        "Garlic",
+        "Extra virgin olive oil",
+        "Fresh basil",
+        "Sea salt",
+        "Black pepper"
+      ],
+      "allergens": [
+        "Gluten"
+      ]
+    },
+    {
+      "name": "Crispy Calamari",
+      "category": "Appetizers",
+      "description": "Tender wild-caught squid rings dusted with seasoned cornstarch, flash-fried and served with lemon wedges and house garlic aioli.",
+      "price": 14.00,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Wild squid",
+        "Cornstarch",
+        "Canola oil",
+        "Sea salt",
+        "Black pepper",
+        "Lemon",
+        "Pasteurized egg yolk",
+        "Garlic",
+        "Olive oil"
+      ],
+      "allergens": [
+        "Shellfish",
+        "Eggs"
+      ]
+    },
+    {
+      "name": "Caprese Salad",
+      "category": "Appetizers",
+      "description": "Thick slices of fresh Italian buffalo mozzarella layered with heirloom tomatoes, fresh basil leaves, and balsamic reduction.",
+      "price": 12.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Buffalo mozzarella",
+        "Heirloom tomatoes",
+        "Fresh basil",
+        "Balsamic vinegar reduction",
+        "Extra virgin olive oil",
+        "Flaky sea salt",
+        "Cracked black pepper"
+      ],
+      "allergens": [
+        "Dairy"
+      ]
+    },
+    {
+      "name": "Margherita Pizza",
+      "category": "Mains",
+      "description": "Classic Neapolitan style pizza with San Marzano tomato sauce, fresh Fior di Latte mozzarella, fresh basil, and extra virgin olive oil.",
+      "price": 16.00,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Wheat flour",
+        "Water",
+        "Brewer's yeast",
+        "San Marzano tomato sauce",
+        "Fior di Latte mozzarella",
+        "Fresh basil",
+        "Extra virgin olive oil",
+        "Sea salt"
+      ],
+      "allergens": [
+        "Gluten",
+        "Dairy"
+      ]
+    },
+    {
+      "name": "Grilled Salmon Fillet",
+      "category": "Mains",
+      "description": "Pan-seared Atlantic salmon fillet served with lemon herb butter sauce, steamed asparagus, and roasted baby potatoes.",
+      "price": 24.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Atlantic salmon fillet",
+        "Lemon juice",
+        "Unsalted butter",
+        "Fresh rosemary",
+        "Fresh thyme",
+        "Garlic",
+        "Asparagus",
+        "Baby potatoes",
+        "Extra virgin olive oil",
+        "Sea salt",
+        "Black pepper"
+      ],
+      "allergens": [
+        "Fish",
+        "Dairy"
+      ]
+    },
+    {
+      "name": "Rigatoni Bolognese",
+      "category": "Mains",
+      "description": "Slow-simmered rich beef and pancetta ragù served over al dente durum wheat rigatoni, topped with aged Parmigiano-Reggiano.",
+      "price": 18.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Durum wheat rigatoni",
+        "Ground beef chuck",
+        "Pancetta",
+        "Crushed Italian tomatoes",
+        "Yellow onions",
+        "Carrots",
+        "Celery",
+        "Red wine",
+        "Olive oil",
+        "Parmigiano-Reggiano cheese",
+        "Sea salt",
+        "Black pepper"
+      ],
+      "allergens": [
+        "Gluten",
+        "Dairy"
+      ]
+    },
+    {
+      "name": "Vegan Mediterranean Bowl",
+      "category": "Mains",
+      "description": "Warm organic tricolor quinoa, spiced roasted chickpeas, ripe avocado, baby spinach, cucumber ribbons, and a creamy lemon tahini dressing.",
+      "price": 15.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Organic tricolor quinoa",
+        "Chickpeas",
+        "Avocado",
+        "Baby spinach",
+        "Persian cucumber",
+        "Tahini paste",
+        "Lemon juice",
+        "Garlic",
+        "Cumin",
+        "Olive oil",
+        "Sea salt"
+      ],
+      "allergens": [
+        "Sesame"
+      ]
+    },
+    {
+      "name": "Chef's Daily Rotating Special",
+      "category": "Mains",
+      "description": "Market-fresh daily creation curated by our head chef with seasonal regional produce. Ask server for today's recipe details.",
+      "price": 26.00,
+      "is_available": true,
+      "allergen_status": "unverified",
+      "ingredients": [
+        "Daily seasonal market ingredients (varies daily)"
+      ],
+      "allergens": []
+    },
+    {
+      "name": "Classic Tiramisu",
+      "category": "Desserts",
+      "description": "Traditional Italian dessert with Savoiardi ladyfingers soaked in dark espresso, layered with whipped mascarpone cream and dusted with Dutch cocoa.",
+      "price": 8.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Savoiardi ladyfingers",
+        "Mascarpone cheese",
+        "Fresh egg yolks",
+        "Espresso coffee",
+        "Cane sugar",
+        "Dutch process cocoa powder"
+      ],
+      "allergens": [
+        "Gluten",
+        "Dairy",
+        "Eggs"
+      ]
+    },
+    {
+      "name": "Artisan Sorbet Trio",
+      "category": "Desserts",
+      "description": "Refreshing dairy-free trio of mango, raspberry, and Sicilian lemon sorbets garnished with fresh berries.",
+      "price": 7.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Mango purée",
+        "Raspberry purée",
+        "Sicilian lemon juice",
+        "Filtered water",
+        "Cane sugar",
+        "Fresh mint garnish"
+      ],
+      "allergens": []
+    },
+    {
+      "name": "Fresh Mint Lemonade",
+      "category": "Beverages",
+      "description": "House-squeezed lemon juice shaken with fresh crushed spearmint leaves, pure cane sugar syrup, and iced sparkling water.",
+      "price": 4.50,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Fresh lemon juice",
+        "Fresh mint leaves",
+        "Cane sugar syrup",
+        "Sparkling water",
+        "Ice"
+      ],
+      "allergens": []
+    },
+    {
+      "name": "Iced Oat Milk Latte",
+      "category": "Beverages",
+      "description": "Double shot of rich espresso poured over chilled artisanal oat milk and served over ice.",
+      "price": 5.00,
+      "is_available": true,
+      "allergen_status": "verified",
+      "ingredients": [
+        "Espresso coffee",
+        "Artisanal oat milk",
+        "Ice"
+      ],
+      "allergens": [
+        "Gluten"
+      ]
+    }
+  ],
+  "tables": [
+    { "table_number": "T1", "capacity": 2, "is_active": true },
+    { "table_number": "T2", "capacity": 2, "is_active": true },
+    { "table_number": "T3", "capacity": 4, "is_active": true },
+    { "table_number": "T4", "capacity": 4, "is_active": true },
+    { "table_number": "T5", "capacity": 6, "is_active": true },
+    { "table_number": "T6", "capacity": 8, "is_active": true }
+  ]
+}
