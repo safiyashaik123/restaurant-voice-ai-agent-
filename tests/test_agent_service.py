@@ -535,8 +535,8 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.assertIn(old_session_id, fast_ttl_agent._sessions)
         self.assertIn(active_session_id, fast_ttl_agent._sessions)
 
-        # Back-date the old session's created_at so it looks expired
-        fast_ttl_agent._sessions[old_session_id].created_at = datetime.now() - timedelta(seconds=5)
+        # Back-date the old session's last activity so it looks expired
+        fast_ttl_agent._sessions[old_session_id].last_activity_at = datetime.now() - timedelta(seconds=5)
 
         # Trigger eviction by accessing any session
         fast_ttl_agent.get_session(active_session_id)
@@ -545,6 +545,34 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.assertNotIn(old_session_id, fast_ttl_agent._sessions)
         self.assertIn(active_session_id, fast_ttl_agent._sessions)
         self.assertEqual(fast_ttl_agent._sessions[active_session_id].slots.get("customer_name"), "Live")
+
+    def test_session_activity_refresh_prevents_premature_eviction(self):
+        """Access refreshes idle TTL without changing creation time or losing slots."""
+        agent = AgentService(db_path=self.db_uri, llm_service=self.mock_llm, session_ttl_seconds=10)
+        state = agent.get_session("active")
+        state.slots["customer_name"] = "Live"
+        start = datetime(2026, 1, 1, 12, 0, 0)
+        state.created_at = start
+        state.last_activity_at = start
+
+        with patch("src.services.agent_service.datetime") as clock:
+            clock.now.return_value = start + timedelta(seconds=8)
+            self.assertIs(agent.get_session("active"), state)
+            self.assertEqual(state.last_activity_at, start + timedelta(seconds=8))
+            self.assertEqual(state.created_at, start)
+
+            # Creation is now older than the TTL, but recent activity is not.
+            clock.now.return_value = start + timedelta(seconds=12)
+            self.assertIs(agent.get_session("active"), state)
+            self.assertEqual(state.last_activity_at, start + timedelta(seconds=12))
+            self.assertEqual(state.slots["customer_name"], "Live")
+            self.assertEqual(state.created_at, start)
+
+            # Once idle beyond the TTL, the same ID gets fresh state.
+            clock.now.return_value = start + timedelta(seconds=23)
+            replacement = agent.get_session("active")
+            self.assertIsNot(replacement, state)
+            self.assertEqual(replacement.slots, {})
 
     def test_session_expiry_does_not_affect_other_sessions(self):
         """Evicting an expired session must never touch other sessions' slot data."""
@@ -559,7 +587,7 @@ class TestAgentServiceUnit(unittest.TestCase):
 
         # Expire sessions 0, 1, 2 only
         for i in range(3):
-            fast_ttl_agent._sessions[f"session_{i}"].created_at = datetime.now() - timedelta(seconds=5)
+            fast_ttl_agent._sessions[f"session_{i}"].last_activity_at = datetime.now() - timedelta(seconds=5)
 
         # Trigger eviction
         fast_ttl_agent.get_session("session_3")

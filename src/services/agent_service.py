@@ -99,6 +99,7 @@ class InteractionState:
     pending_intent: Optional[str] = None
     slots: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
+    last_activity_at: datetime = field(default_factory=datetime.now)
 
     def update_slots(self, entities: ExtractedEntities) -> None:
         """Accumulate new entity values into slot state."""
@@ -252,21 +253,22 @@ class AgentService:
         current AgentService instance; other instances are unaffected.
         """
         cutoff = datetime.now() - self._session_ttl
-        expired = [sid for sid, state in self._sessions.items() if state.created_at < cutoff]
+        expired = [sid for sid, state in self._sessions.items() if state.last_activity_at < cutoff]
         for sid in expired:
-            logger.debug("Evicting expired session '%s' (idle since %s)", sid, self._sessions[sid].created_at)
+            logger.debug("Evicting expired session '%s' (idle since %s)", sid, self._sessions[sid].last_activity_at)
             del self._sessions[sid]
 
     def get_session(self, session_id: str) -> InteractionState:
         """Get or initialize in-memory interaction state for a session.
 
-        Expired sessions from *other* customers are evicted on each call so
-        that the in-memory dict stays bounded.  Each session_id remains
-        fully isolated; eviction of session A never affects session B.
+        Expired sessions are evicted on each call, including the requested
+        session if it has been idle too long. Each session_id remains isolated.
         """
         self._evict_expired_sessions()
         if session_id not in self._sessions:
             self._sessions[session_id] = InteractionState(session_id=session_id)
+        else:
+            self._sessions[session_id].last_activity_at = datetime.now()
         return self._sessions[session_id]
 
     def clear_session(self, session_id: str) -> None:
