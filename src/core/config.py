@@ -52,6 +52,21 @@ class AppConfig:
     whisper_device: str = os.environ.get("WHISPER_DEVICE", "cpu")
 
     @property
+    def api_allowed_origins(self) -> list[str]:
+        """Explicit browser origins allowed to access the API."""
+        return [origin.strip() for origin in os.environ.get(
+            "API_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+        ).split(",") if origin.strip() and origin.strip() != "*"]
+
+    @property
+    def api_max_upload_bytes(self) -> int:
+        """Maximum audio upload size, defaulting to 10 MiB."""
+        value = int(os.environ.get("API_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+        if value <= 0:
+            raise ValueError("API_MAX_UPLOAD_BYTES must be positive")
+        return value
+
+    @property
     def piper_model_dir(self) -> Path:
         """Directory containing local Piper ONNX voices and their JSON configs."""
         return Path(os.environ.get("PIPER_MODEL_DIR", str(self.models_dir / "piper")))

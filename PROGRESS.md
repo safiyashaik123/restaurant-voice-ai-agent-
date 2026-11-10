@@ -2,7 +2,7 @@
 
 ## Project Status Overview
 
-- **Status:** Phases 0–4 complete; Phase 5 (FastAPI orchestration) and Phase 6 (React frontend) not started; Phase 7 (QA and benchmarking) pending.
+- **Status:** Phases 0–5 implemented; Phase 6 (React frontend) not started; Phase 7 (QA and benchmarking) pending.
 - **Last Updated:** 2026-11-10
 
 ---
@@ -95,9 +95,12 @@
   - [x] Run local TTS tests: **11 / 11 passed**.
   - [x] Run the complete local test suite: **104 / 104 passed in 46.09 seconds**.
 
-- [ ] **Phase 5: FastAPI Backend Orchestration (Not started)**
-  - [ ] Build FastAPI server with REST and audio endpoints (`/api/voice`, `/api/chat`, `/api/menu`, `/api/reservations`).
-  - [ ] Wire end-to-end pipeline: Audio -> faster-whisper -> Grounded Agent -> SQLite -> Piper TTS -> Audio response.
+- [x] **Phase 5: FastAPI Backend Orchestration (Implemented; mocked verification)**
+  - [x] Build FastAPI endpoints (`/api/health`, `/api/voice`, `/api/chat`, `/api/menu`, `/api/reservations`) with schemas, configurable CORS, and bounded audio uploads.
+  - [x] Wire Audio -> faster-whisper -> Grounded Agent -> SQLite -> Piper TTS -> WAV response using existing services; clean up temporary files.
+  - [x] Document startup, configuration, endpoint examples and deployment limitations in `API.md`.
+  - [x] Run API unit tests: **18 passed**; full suite on Python 3.11: **114 passed, 8 skipped, 15 subtests passed**. The skipped integration tests require live Ollama.
+  - [ ] Verify the complete pipeline with live local models and target Windows environment during Phase 7.
 
 - [ ] **Phase 6: React + TypeScript Frontend Development (Not started)**
   - [ ] Initialize Vite + React + TypeScript + CSS in `frontend/` using existing Node.js environment.
