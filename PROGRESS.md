@@ -2,7 +2,7 @@
 
 ## Project Status Overview
 
-- **Status:** Phase 2, Step 3 Completed (Grounded Agent Router & Idle Session TTL Verified)
+- **Status:** Phase 4 Piper TTS service implemented; live voice verification and benchmarking pending
 - **Last Updated:** 2026-11-10
 
 ---
@@ -86,9 +86,12 @@
   - [ ] Benchmark transcription latency and memory usage on CPU.
 
 - [ ] **Phase 4: Text-to-Speech (TTS) via Piper**
-  - [ ] Set up local Piper ONNX voice model.
-  - [ ] Implement `tts_service.py` for WAV speech synthesis.
-  - [ ] Benchmark speech synthesis latency and verify audio output.
+  - [ ] Set up local Piper ONNX voice model and verify real audio on the target machine.
+  - [x] Implement `tts_service.py` for local WAV speech synthesis using Piper 1.8+; the default voice is `en_US-lessac-medium`.
+  - [x] Configure `PIPER_MODEL_DIR` (default `models/piper`) and `PIPER_MODEL_NAME`; load the model lazily and reuse it without downloading it.
+  - [x] Add mocked tests for voice loading, WAV output, configuration and failure handling: **11 passed, 13 subtests passed**.
+  - [x] Run regression tests on Python 3.11: **96 passed, 8 skipped, 15 subtests passed**; live Ollama tests skipped because Ollama was unavailable.
+  - [ ] Benchmark speech synthesis latency and memory usage and verify real audio output on Windows / Python 3.10.
 
 - [ ] **Phase 5: FastAPI Backend Orchestration**
   - [ ] Build FastAPI server with REST and audio endpoints (`/api/voice`, `/api/chat`, `/api/menu`, `/api/reservations`).

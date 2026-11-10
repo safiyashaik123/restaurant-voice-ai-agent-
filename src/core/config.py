@@ -51,6 +51,11 @@ class AppConfig:
 
     whisper_device: str = os.environ.get("WHISPER_DEVICE", "cpu")
 
+    @property
+    def piper_model_dir(self) -> Path:
+        """Directory containing local Piper ONNX voices and their JSON configs."""
+        return Path(os.environ.get("PIPER_MODEL_DIR", str(self.models_dir / "piper")))
+
 
 # Singleton instance
 config = AppConfig()

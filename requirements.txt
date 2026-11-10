@@ -15,6 +15,6 @@ pytest-asyncio>=0.23.0
 # Speech to Text & Text to Speech (Phases 3 & 4)
 # Note: faster-whisper and audio processing dependencies
 faster-whisper>=1.0.0
-piper-tts>=1.2.0
+piper-tts>=1.8.0
 soundfile>=0.12.1
 numpy>=1.24.0
