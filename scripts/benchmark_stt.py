@@ -48,10 +48,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path, help="UTF-8 JSONL with audio and text fields")
     parser.add_argument("--model", required=True, choices=("tiny.en", "base.en"))
+    parser.add_argument("--vad", action="store_true", help="Enable voice activity detection")
     args = parser.parse_args()
     try:
         entries = load_manifest(args.manifest)
-        service = STTService(model_name=args.model)
+        service = STTService(model_name=args.model, vad_filter=args.vad)
         print(f"Model: {args.model}; device: {service.device}; compute: {service.compute_type}; "
               f"beam: {service.beam_size}; VAD: {service.vad_filter}; language: en")
         # Record cold load plus first inference separately; the actual comparison is warm.

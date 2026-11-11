@@ -121,4 +121,6 @@ Audio is inspected with PyAV, then decoded once with faster-whisper's decoder to
    python -m scripts.benchmark_stt "$env:USERPROFILE\stt-benchmark\recordings.jsonl" --model base.en
    ```
 
+   Add `--vad` to both benchmark commands to enable VAD; without the flag the benchmark disables VAD regardless of `WHISPER_VAD_FILTER`. This does not change the API's STT configuration.
+
    Compare per-recording transcripts, word error rates and wall times, plus aggregate WER and mean warm time. WER is `(substitutions + deletions + insertions) / reference words`; text is Unicode-normalized, case-folded, punctuation removed, and whitespace-tokenized. Aggregate WER is total errors divided by total reference words. WER can exceed 1. The separately reported first transcription includes model loading and inference, but may benefit from the OS disk cache; it is excluded from WER and warm timings. A warm-up transcribes the first recording, then every recording is measured once. A failure aborts the run rather than counting it as a successful result. Repeat runs under comparable system load and inspect errors as well as averages. Output contains transcript text and filenames: handle it as sensitive. No benchmark results are claimed here.

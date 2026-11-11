@@ -24,17 +24,21 @@ def test_manifest_validation_and_relative_audio_paths(tmp_path):
         load_manifest(path)
 
 
-def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys):
+@pytest.mark.parametrize('vad_args, expected_vad', [([], False), (['--vad'], True)])
+def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys, monkeypatch, vad_args, expected_vad):
+    # The CLI flag, not the production environment setting, controls this run.
+    monkeypatch.setenv('WHISPER_VAD_FILTER', 'true')
     path = tmp_path / 'recordings.jsonl'
     path.write_text('\n'.join(json.dumps(item) for item in [
         {'audio': 'a.wav', 'text': 'tell me about caprese salad'},
         {'audio': 'b.wav', 'text': 'hello world'},
     ]), encoding='utf-8')
-    with patch('scripts.benchmark_stt.STTService') as cls, patch('sys.argv', ['benchmark_stt', str(path), '--model', 'base.en']):
+    with patch('scripts.benchmark_stt.STTService') as cls, patch('sys.argv', ['benchmark_stt', str(path), '--model', 'base.en', *vad_args]):
         service = cls.return_value
+        service.vad_filter = expected_vad
         service.transcribe.side_effect = ['warm up', 'tell me about caesar salad', 'hello world']
         assert main() == 0
-    cls.assert_called_once_with(model_name='base.en')
+    cls.assert_called_once_with(model_name='base.en', vad_filter=expected_vad)
     assert service.transcribe.call_count == 3
     output = capsys.readouterr().out
     assert 'Cold first transcription' in output and 'Aggregate WER: 0.143 (1/7)' in output
