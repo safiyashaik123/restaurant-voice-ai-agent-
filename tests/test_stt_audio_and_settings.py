@@ -61,7 +61,7 @@ def test_real_audio_is_decoded_once_to_16khz_mono(tmp_path, rate, channels, fram
     audio = model.transcribe.call_args.args[0]
     assert audio.dtype == np.float32 and audio.ndim == 1
     assert len(audio) == 1600 and 0.1 < float(np.max(np.abs(audio))) < 0.5
-    assert model.transcribe.call_args.kwargs == {'language': 'en', 'task': 'transcribe', 'beam_size': 3, 'vad_filter': True}
+    assert model.transcribe.call_args.kwargs == {'language': 'en', 'task': 'transcribe', 'beam_size': 3, 'vad_filter': True, 'initial_prompt': None}
 
 
 def test_silent_and_zero_sample_audio_do_not_load_model(tmp_path):

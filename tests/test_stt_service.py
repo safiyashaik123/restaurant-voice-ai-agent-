@@ -70,9 +70,24 @@ class TestSTTService(unittest.TestCase):
         self.assertEqual(model.transcribe.call_count, 2)
         args, kwargs = model.transcribe.call_args
         np.testing.assert_array_equal(args[0], np.array([0.1], dtype=np.float32))
-        self.assertEqual(kwargs, {"language": "en", "task": "transcribe", "beam_size": 5, "vad_filter": False})
+        self.assertEqual(kwargs, {"language": "en", "task": "transcribe", "beam_size": 5, "vad_filter": False, "initial_prompt": None})
         self.assertEqual(self.mock_audio_decode.call_count, 2)
         self.mock_audio_decode.assert_called_with(str(self.audio_path), sampling_rate=16000)
+
+    @patch("src.services.stt_service.WhisperModel")
+    def test_initial_prompt_is_forwarded_per_call(self, model_class):
+        model = model_class.return_value
+        model.transcribe.side_effect = [
+            (iter([SimpleNamespace(text="Caprese Salad")]), None),
+            (iter([SimpleNamespace(text="Hello")]), None),
+        ]
+        service = STTService()
+        prompt = "Caprese Salad, ingredients, vegetarian, reservation, menu"
+        self.assertEqual(service.transcribe(self.audio_path, initial_prompt=prompt), "Caprese Salad")
+        self.assertEqual(model.transcribe.call_args.kwargs["initial_prompt"], prompt)
+        self.assertEqual(service.transcribe(self.audio_path), "Hello")
+        self.assertIsNone(model.transcribe.call_args.kwargs["initial_prompt"])
+        model_class.assert_called_once()
 
     @patch("src.services.stt_service.WhisperModel")
     def test_explicit_configuration(self, model_class):

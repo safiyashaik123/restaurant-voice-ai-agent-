@@ -49,6 +49,7 @@ def main() -> int:
     parser.add_argument("manifest", type=Path, help="UTF-8 JSONL with audio and text fields")
     parser.add_argument("--model", required=True, choices=("tiny.en", "base.en"))
     parser.add_argument("--vad", action="store_true", help="Enable voice activity detection")
+    parser.add_argument("--initial-prompt", help="Optional vocabulary prompt for transcription")
     args = parser.parse_args()
     try:
         entries = load_manifest(args.manifest)
@@ -57,13 +58,13 @@ def main() -> int:
               f"beam: {service.beam_size}; VAD: {service.vad_filter}; language: en")
         # Record cold load plus first inference separately; the actual comparison is warm.
         start = time.perf_counter()
-        service.transcribe(entries[0][0])
+        service.transcribe(entries[0][0], initial_prompt=args.initial_prompt)
         print(f"Cold first transcription: {time.perf_counter() - start:.3f} s (excluded from WER and warm timing)")
         total_errors = total_words = 0
         total_seconds = 0.0
         for path, reference in entries:
             start = time.perf_counter()
-            hypothesis = service.transcribe(path)
+            hypothesis = service.transcribe(path, initial_prompt=args.initial_prompt)
             elapsed = time.perf_counter() - start
             expected_words = words(reference)
             errors = word_errors(expected_words, words(hypothesis))

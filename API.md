@@ -123,4 +123,12 @@ Audio is inspected with PyAV, then decoded once with faster-whisper's decoder to
 
    Add `--vad` to both benchmark commands to enable VAD; without the flag the benchmark disables VAD regardless of `WHISPER_VAD_FILTER`. This does not change the API's STT configuration.
 
+   To test a vocabulary prompt, compare the same model and recordings with and without the flag below, keeping the other settings identical:
+
+   ```powershell
+   python -m scripts.benchmark_stt "$env:USERPROFILE\stt-benchmark\recordings.jsonl" --model base.en --initial-prompt "Caprese Salad, ingredients, vegetarian, reservation, menu"
+   ```
+
+   The prompt applies to the warm-up and each measured transcription, not to production API calls. Check individual transcripts for prompted words that were not actually spoken as well as comparing WER and time; an accuracy improvement is not guaranteed.
+
    Compare per-recording transcripts, word error rates and wall times, plus aggregate WER and mean warm time. WER is `(substitutions + deletions + insertions) / reference words`; text is Unicode-normalized, case-folded, punctuation removed, and whitespace-tokenized. Aggregate WER is total errors divided by total reference words. WER can exceed 1. The separately reported first transcription includes model loading and inference, but may benefit from the OS disk cache; it is excluded from WER and warm timings. A warm-up transcribes the first recording, then every recording is measured once. A failure aborts the run rather than counting it as a successful result. Repeat runs under comparable system load and inspect errors as well as averages. Output contains transcript text and filenames: handle it as sensitive. No benchmark results are claimed here.

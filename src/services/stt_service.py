@@ -89,8 +89,8 @@ class STTService:
                     ) from exc
             return self._model
 
-    def transcribe(self, audio_path: Union[str, os.PathLike]) -> str:
-        """Return recognized text from an audio file, or raise an STTError."""
+    def transcribe(self, audio_path: Union[str, os.PathLike], initial_prompt: str | None = None) -> str:
+        """Return recognized text, optionally using a prompt for the first window."""
         path = Path(audio_path)
         if not path.exists():
             raise AudioFileNotFoundError(f"Audio file does not exist: {path}")
@@ -124,7 +124,8 @@ class STTService:
         model = self._get_model()
         try:
             segments, _ = model.transcribe(audio, language="en", task="transcribe",
-                                           beam_size=self.beam_size, vad_filter=self.vad_filter)
+                                           beam_size=self.beam_size, vad_filter=self.vad_filter,
+                                           initial_prompt=initial_prompt)
             # faster-whisper returns a lazy iterator: errors may occur here too.
             text = " ".join(segment.text.strip() for segment in segments if segment.text.strip())
         except (FFmpegError, EOFError) as exc:

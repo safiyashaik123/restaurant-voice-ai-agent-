@@ -1,6 +1,6 @@
 """Benchmark metrics and manifest behavior without speech models."""
 import json
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 
@@ -25,7 +25,8 @@ def test_manifest_validation_and_relative_audio_paths(tmp_path):
 
 
 @pytest.mark.parametrize('vad_args, expected_vad', [([], False), (['--vad'], True)])
-def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys, monkeypatch, vad_args, expected_vad):
+@pytest.mark.parametrize('prompt_args, prompt', [([], None), (['--initial-prompt', 'Caprese Salad, menu'], 'Caprese Salad, menu')])
+def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys, monkeypatch, vad_args, expected_vad, prompt_args, prompt):
     # The CLI flag, not the production environment setting, controls this run.
     monkeypatch.setenv('WHISPER_VAD_FILTER', 'true')
     path = tmp_path / 'recordings.jsonl'
@@ -33,12 +34,16 @@ def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys, monkey
         {'audio': 'a.wav', 'text': 'tell me about caprese salad'},
         {'audio': 'b.wav', 'text': 'hello world'},
     ]), encoding='utf-8')
-    with patch('scripts.benchmark_stt.STTService') as cls, patch('sys.argv', ['benchmark_stt', str(path), '--model', 'base.en', *vad_args]):
+    with patch('scripts.benchmark_stt.STTService') as cls, patch('sys.argv', ['benchmark_stt', str(path), '--model', 'base.en', *vad_args, *prompt_args]):
         service = cls.return_value
         service.vad_filter = expected_vad
         service.transcribe.side_effect = ['warm up', 'tell me about caesar salad', 'hello world']
         assert main() == 0
     cls.assert_called_once_with(model_name='base.en', vad_filter=expected_vad)
-    assert service.transcribe.call_count == 3
+    assert service.transcribe.call_args_list == [
+        call(tmp_path / 'a.wav', initial_prompt=prompt),  # warm-up
+        call(tmp_path / 'a.wav', initial_prompt=prompt),
+        call(tmp_path / 'b.wav', initial_prompt=prompt),
+    ]
     output = capsys.readouterr().out
     assert 'Cold first transcription' in output and 'Aggregate WER: 0.143 (1/7)' in output

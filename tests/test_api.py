@@ -328,5 +328,5 @@ def test_voice_real_decoding_preserves_api_and_piper_contract(setup, tmp_path):
     assert unquote(response.headers['x-transcript']) == 'Tell me about Caprese Salad'
     audio = model.transcribe.call_args.args[0]
     assert audio.ndim == 1 and len(audio) == 1600
-    assert model.transcribe.call_args.kwargs == {'language': 'en', 'task': 'transcribe', 'beam_size': 3, 'vad_filter': True}
+    assert model.transcribe.call_args.kwargs == {'language': 'en', 'task': 'transcribe', 'beam_size': 3, 'vad_filter': True, 'initial_prompt': None}
     setup.tts.synthesize.assert_called_once()
