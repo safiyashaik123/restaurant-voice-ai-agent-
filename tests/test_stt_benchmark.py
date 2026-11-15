@@ -31,7 +31,7 @@ def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys, monkey
     monkeypatch.setenv('WHISPER_VAD_FILTER', 'true')
     path = tmp_path / 'recordings.jsonl'
     path.write_text('\n'.join(json.dumps(item) for item in [
-        {'audio': 'a.wav', 'text': 'tell me about caprese salad'},
+        {'audio': 'a.wav', 'text': 'Tell me about caprese salad.'},
         {'audio': 'b.wav', 'text': 'hello world'},
     ]), encoding='utf-8')
     with patch('scripts.benchmark_stt.STTService') as cls, patch('sys.argv', ['benchmark_stt', str(path), '--model', 'base.en', *vad_args, *prompt_args]):
@@ -46,4 +46,7 @@ def test_benchmark_warmup_aggregate_and_model_selection(tmp_path, capsys, monkey
         call(tmp_path / 'b.wav', initial_prompt=prompt),
     ]
     output = capsys.readouterr().out
-    assert 'Cold first transcription' in output and 'Aggregate WER: 0.143 (1/7)' in output
+    assert 'Cold first transcription' in output
+    assert 'Aggregate Raw WER: 0.429 (3/7)' in output
+    assert 'Aggregate Normalized WER: 0.143 (1/7)' in output
+    assert 'warm total:' in output and 'warm mean:' in output

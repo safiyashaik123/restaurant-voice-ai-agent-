@@ -102,3 +102,23 @@ class TestReservationAtomicity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_concurrent_duplicate_submissions_are_rejected(tmp_path):
+    path = tmp_path / 'restaurant.db'
+    init_database(path)
+    day = (restaurant_today() + timedelta(days=1)).isoformat()
+    barrier = Barrier(2)
+    def book(_):
+        barrier.wait(timeout=5)
+        try:
+            with get_db(path, immediate=True) as conn:
+                return create_reservation(conn, 'Alice', '9870001234', 2, day, '18:00')
+        except ValueError as exc:
+            assert 'already exists' in str(exc)
+            return None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(book, range(2)))
+    assert sum(result is not None for result in results) == 1
+    with get_db(path) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM reservations WHERE status='confirmed'").fetchone()[0] == 1

@@ -1,4 +1,4 @@
-import type { ChatResponse, MenuResponse, ReservationRequest, ReservationResponse } from '../types'
+import type { ChatResponse, MenuResponse, ReservationRequest, ReservationResponse, ReservationSummary } from '../types'
 
 const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
@@ -25,10 +25,16 @@ export const api = {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, session_id: sessionId }),
   })).json() as Promise<ChatResponse>,
   menu: async (category?: string) => (await request(`/menu${category ? `?category=${encodeURIComponent(category)}` : ''}`)).json() as Promise<MenuResponse>,
-  reservationSlots: async (date: string) => (await request(`/reservations/slots?date=${encodeURIComponent(date)}`)).json() as Promise<{ date: string; slots: string[] }>,
+  reservationSlots: async (date: string, partySize?: number) => (await request(`/reservations/slots?date=${encodeURIComponent(date)}${partySize ? `&party_size=${partySize}` : ''}`)).json() as Promise<{ date: string; slots: string[] }>,
   reserve: async (details: ReservationRequest) => (await request('/reservations', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(details),
   })).json() as Promise<ReservationResponse>,
+  lookupReservation: async (reservation_id: number, access_code: string) => (await request('/reservations/lookup', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reservation_id, access_code }),
+  })).json() as Promise<ReservationSummary>,
+  cancelReservation: async (reservation_id: number, access_code: string) => (await request('/reservations/cancel', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reservation_id, access_code, confirm: true }),
+  })).json() as Promise<ReservationSummary>,
   voice: async (recording: Blob, sessionId: string) => {
     const form = new FormData()
     // MediaRecorder may report codec parameters; the backend accepts the base MIME type.

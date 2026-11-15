@@ -23,6 +23,7 @@ def write_wav(path, rate=48000, channels=2, silent=False, frames=4800):
 
 
 def test_settings_defaults_environment_and_validation(monkeypatch):
+    # Check defaults without inheriting the developer's production environment.
     monkeypatch.delenv('WHISPER_BEAM_SIZE', raising=False)
     monkeypatch.delenv('WHISPER_VAD_FILTER', raising=False)
     assert AppConfig().whisper_beam_size == 5 and AppConfig().whisper_vad_filter is False

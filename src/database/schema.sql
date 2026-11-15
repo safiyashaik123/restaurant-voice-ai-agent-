@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS reservations (
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
+-- Private access credentials for new bookings; legacy rows remain unchanged.
+CREATE TABLE IF NOT EXISTS reservation_access (
+    reservation_id INTEGER PRIMARY KEY REFERENCES reservations(id) ON DELETE CASCADE,
+    secret_hash TEXT NOT NULL
+);
+
 -- Indexes for performance & query optimization
 CREATE INDEX IF NOT EXISTS idx_menu_items_name ON menu_items(name);
 CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category_id);

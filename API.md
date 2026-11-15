@@ -131,4 +131,24 @@ Audio is inspected with PyAV, then decoded once with faster-whisper's decoder to
 
    The prompt applies to the warm-up and each measured transcription, not to production API calls. Check individual transcripts for prompted words that were not actually spoken as well as comparing WER and time; an accuracy improvement is not guaranteed.
 
-   Compare per-recording transcripts, word error rates and wall times, plus aggregate WER and mean warm time. WER is `(substitutions + deletions + insertions) / reference words`; text is Unicode-normalized, case-folded, punctuation removed, and whitespace-tokenized. Aggregate WER is total errors divided by total reference words. WER can exceed 1. The separately reported first transcription includes model loading and inference, but may benefit from the OS disk cache; it is excluded from WER and warm timings. A warm-up transcribes the first recording, then every recording is measured once. A failure aborts the run rather than counting it as a successful result. Repeat runs under comparable system load and inspect errors as well as averages. Output contains transcript text and filenames: handle it as sensitive. No benchmark results are claimed here.
+   Compare per-recording transcripts, word error rates and wall times, plus aggregate WER and mean warm time. WER is `(substitutions + deletions + insertions) / reference words`. Raw WER uses whitespace-tokenized text with case and punctuation retained; normalized WER uses Unicode-normalized, case-folded text with punctuation removed before whitespace tokenization. Each aggregate WER is total errors divided by total reference words for that tokenization. WER can exceed 1. The separately reported first transcription includes model loading and inference, but may benefit from the OS disk cache; it is excluded from WER and warm timings. A warm-up transcribes the first recording, then every recording is measured once. A failure aborts the run rather than counting it as a successful result. Repeat runs under comparable system load and inspect errors as well as averages. Output contains transcript text and filenames: handle it as sensitive. No benchmark results are claimed here.
+
+### Reservation access
+
+New bookings return a one-time `access_code` alongside the reference. Customers
+must save it privately: only its SHA-256 digest is stored. `POST
+/api/reservations/lookup` accepts JSON `{ "reservation_id": 42, "access_code":
+"..." }` and returns only that booking's reference, date, time, party size and
+status. `POST /api/reservations/cancel` accepts the same fields plus
+`"confirm": true`; it retains the row with cancelled status. An incorrect code
+and a nonexistent reference return the same 404 response. Bookings made before
+access codes were introduced cannot be recovered online; contact staff. Chat and
+voice do not cancel using references alone: use the Reservations page.
+
+`RESERVATION_MAX_ADVANCE_DAYS` optionally sets the number of restaurant-local
+calendar days ahead accepted; unset means no maximum. `party_size` may be passed
+to `/api/reservations/slots` to filter slots by table availability. Availability
+is rechecked when booking. The per-process lookup throttle is not a substitute
+for a shared, proxy-aware rate limiter and HTTPS in a network deployment. The
+access code is a bearer secret: anyone who obtains it and the reference can act
+on the booking. Do not log, share, or store it on a shared device.

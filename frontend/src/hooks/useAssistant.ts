@@ -55,7 +55,9 @@ export function useAssistant(sessionId: string) {
     try {
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true })
       if (!active.current) { stream.current.getTracks().forEach(track => track.stop()); busy.current = false; return }
-      const options = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type))
+      const options = typeof MediaRecorder.isTypeSupported === 'function'
+        ? ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(type => MediaRecorder.isTypeSupported(type))
+        : undefined
       const media = options ? new MediaRecorder(stream.current, { mimeType: options }) : new MediaRecorder(stream.current)
       recorder.current = media
       const chunks: BlobPart[] = []
@@ -74,10 +76,10 @@ export function useAssistant(sessionId: string) {
           const audioUrl = URL.createObjectURL(result.audio); urls.current.push(audioUrl)
           add({ role: 'assistant', text: result.text || 'Your audio response is ready.', audioUrl })
           const audio = new Audio(audioUrl); player.current = audio
-          audio.onended = () => { if (active.current) setStatus('idle') }
-          audio.onerror = () => { if (active.current) setStatus('idle') }
-          try { await audio.play(); if (active.current) setStatus('speaking') }
-          catch { if (active.current) setStatus('idle') }
+          audio.onended = () => { if (active.current && player.current === audio) { player.current = null; setStatus('idle') } }
+          audio.onerror = () => { if (active.current && player.current === audio) { player.current = null; setStatus('idle'); setError('Audio playback failed. Try the play control on the response.') } }
+          try { await audio.play(); if (active.current && player.current === audio) setStatus('speaking') }
+          catch { if (active.current && player.current === audio) { player.current = null; setStatus('idle'); setError('Automatic playback failed. Use the play control on the response.') } }
         } catch (e) { if (active.current) { setError(errorText(e)); setStatus('idle') } }
         finally { busy.current = false }
       }

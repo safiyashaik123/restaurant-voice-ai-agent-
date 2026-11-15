@@ -59,6 +59,8 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.db_uri = f"file:agent_test_{uuid.uuid4().hex}?mode=memory&cache=shared"
         self.conn = create_connection(self.db_uri)
         init_database(db_path=self.db_uri, seed=True)
+        # A synthetic fixture price, independent of restaurant seed values.
+        self.conn.execute("UPDATE menu_items SET price = 449 WHERE name = ?", ("Margherita Pizza",))
 
         self.mock_llm = MagicMock(spec=OllamaService)
         # Default behavior for mock LLM: fallback to rule-based parser
@@ -132,7 +134,7 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.assertEqual(res.intent, Intent.MENU_INQUIRY)
         self.assertFalse(res.is_fallback)
         self.assertIn("Margherita Pizza", res.text)
-        self.assertIn("$16.00", res.text)
+        self.assertIn("₹449", res.text)
         self.assertIsNotNone(res.data)
 
     def test_menu_inquiry_unlisted_item_triggers_fallback(self):
@@ -357,8 +359,9 @@ class TestAgentServiceUnit(unittest.TestCase):
 
         cancel_res = self.agent.handle_message(f"Cancel reservation {res_id}")
         self.assertEqual(cancel_res.intent, Intent.RESERVATION_CANCELLATION)
-        self.assertTrue(cancel_res.success)
-        self.assertIn("successfully cancelled", cancel_res.text.lower())
+        self.assertFalse(cancel_res.success)
+        self.assertIn("private access code", cancel_res.text.lower())
+        self.assertEqual(self.conn.execute("SELECT status FROM reservations WHERE id=?", (res_id,)).fetchone()[0], "confirmed")
 
     def test_reservation_cancellation_missing_id_prompts_user(self):
         """Asking to cancel without an ID prompts for the reference number."""
@@ -372,7 +375,7 @@ class TestAgentServiceUnit(unittest.TestCase):
         res = self.agent.handle_message("Cancel reservation #99999")
         self.assertEqual(res.intent, Intent.RESERVATION_CANCELLATION)
         self.assertFalse(res.success)
-        self.assertIn("could not find", res.text.lower())
+        self.assertIn("private access code", res.text.lower())
 
     # -----------------------------------------------------------------------
     # 8. Database Error Handling Tests
@@ -494,13 +497,13 @@ class TestAgentServiceUnit(unittest.TestCase):
             f"Cancel reservation {res_id}",
             session_id=cancel_session,
         )
-        self.assertTrue(cancel_res.success)
-        self.assertIn("successfully cancelled", cancel_res.text.lower())
-
-        # Session state must be cleared after successful cancellation
+        self.assertFalse(cancel_res.success)
+        self.assertIn("private access code", cancel_res.text.lower())
+        self.assertEqual(self.conn.execute("SELECT status FROM reservations WHERE id=?", (res_id,)).fetchone()[0], "confirmed")
+        # An unverified request must not clear the unrelated pending booking.
         remaining_state = self.agent.get_session(cancel_session)
-        self.assertIsNone(remaining_state.pending_intent)
-        self.assertEqual(remaining_state.slots, {})
+        self.assertEqual(remaining_state.pending_intent, Intent.RESERVATION_REQUEST)
+        self.assertEqual(remaining_state.slots, {"customer_name": "Diana", "number_of_guests": 2})
 
     def test_cancellation_failure_does_not_clear_session(self):
         """A failed cancellation (unknown ID) must NOT clear the customer's session state."""

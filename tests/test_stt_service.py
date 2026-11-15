@@ -3,6 +3,7 @@
 from dataclasses import fields
 from pathlib import Path
 import tempfile
+import os
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -53,7 +54,8 @@ class TestSTTService(unittest.TestCase):
 
     @patch("src.services.stt_service.WhisperModel")
     def test_defaults_and_model_reuse(self, model_class):
-        with patch.object(config, "whisper_model_size", "tiny.en"), \
+        with patch.dict(os.environ, {"WHISPER_BEAM_SIZE": "5", "WHISPER_VAD_FILTER": "false"}), \
+             patch.object(config, "whisper_model_size", "tiny.en"), \
              patch.object(config, "whisper_device", "cpu"), \
              patch.object(config, "whisper_compute_type", "int8"):
             service = STTService()

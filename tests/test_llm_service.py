@@ -102,12 +102,12 @@ class TestOllamaServiceUnit(unittest.TestCase):
         """Verify generate_restaurant_reply injects database context into system prompt."""
         mock_payload = {
             "model": "qwen2.5:1.5b",
-            "message": {"role": "assistant", "content": "The Margherita Pizza is $16.00."},
+            "message": {"role": "assistant", "content": "The Margherita Pizza is ₹16.00."},
             "done": True
         }
         mock_urlopen.return_value = self._mock_http_response(200, mock_payload)
 
-        context_facts = "Margherita Pizza: Price $16.00. Allergens: Gluten, Dairy."
+        context_facts = "Margherita Pizza: Price ₹16.00. Allergens: Gluten, Dairy."
         self.service.generate_restaurant_reply(
             user_message="How much is the Margherita Pizza?",
             context_facts=context_facts

@@ -54,6 +54,16 @@ class AppConfig:
     whisper_device: str = os.environ.get("WHISPER_DEVICE", "cpu")
 
     @property
+    def reservation_max_advance_days(self) -> int | None:
+        value = os.environ.get("RESERVATION_MAX_ADVANCE_DAYS", "").strip()
+        if not value:
+            return None
+        days = int(value)
+        if days < 0:
+            raise ValueError("RESERVATION_MAX_ADVANCE_DAYS must be non-negative")
+        return days
+
+    @property
     def whisper_beam_size(self) -> int:
         """Beam width for English transcription (faster-whisper default: 5)."""
         try:

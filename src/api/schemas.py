@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, StrictInt, StrictStr, field_validator
+from pydantic import BaseModel, Field, StrictBool, StrictInt, StrictStr, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -69,7 +69,17 @@ class ReservationRequest(BaseModel):
     reservation_time: StrictStr = Field(max_length=32)
 
 
+class ReservationAccessRequest(BaseModel):
+    reservation_id: StrictInt = Field(gt=0, le=9223372036854775807)
+    access_code: StrictStr = Field(min_length=1, max_length=128)
+
+
+class ReservationCancelRequest(ReservationAccessRequest):
+    confirm: StrictBool
+
+
 class ReservationResponse(BaseModel):
+    access_code: str
     reservation_id: int
     table_id: int
     table_number: str

@@ -12,7 +12,7 @@ import unittest
 
 from src.core.reservation_policy import restaurant_today
 from src.core.config import config
-from src.services.agent_service import AgentService, Intent
+from src.services.agent_service import AgentService, Intent, _format_menu_price
 from src.services.llm_service import OllamaService
 
 
@@ -39,17 +39,20 @@ class TestAgentIntegration(unittest.TestCase):
         res = self.agent.handle_message("How much is the Margherita Pizza?")
         self.assertEqual(res.intent, Intent.MENU_INQUIRY)
         self.assertFalse(res.is_fallback)
-        self.assertIn("16", res.text)
+        self.assertIsNotNone(res.data)
+        self.assertIn(_format_menu_price(res.data["price"]), res.text)
         print(f"\n[Live Agent Menu Query]: {res.text}")
 
     def test_live_verified_allergen_query(self):
         """Live inquiry verifying allergens on a dish."""
-        res = self.agent.handle_message("Does the Margherita Pizza contain any dairy or gluten?")
-        self.assertEqual(res.intent, Intent.ALLERGEN_INQUIRY)
-        self.assertFalse(res.is_fallback)
-        lower_text = res.text.lower()
-        self.assertTrue("dairy" in lower_text or "gluten" in lower_text)
-        print(f"\n[Live Agent Allergen Query]: {res.text}")
+        for allergen in ("dairy", "gluten"):
+            with self.subTest(allergen=allergen):
+                res = self.agent.handle_message(f"Does the Margherita Pizza contain {allergen}?")
+                self.assertEqual(res.intent, Intent.ALLERGEN_INQUIRY)
+                self.assertFalse(res.is_fallback)
+                self.assertIn(f"contains {allergen}", res.text.lower())
+                self.assertIn("cross-contact", res.text.lower())
+                print(f"\n[Live Agent Allergen Query]: {res.text}")
 
     def test_live_unverified_allergen_query_triggers_safe_fallback(self):
         """Live inquiry for unverified dish must trigger staff referral fallback."""

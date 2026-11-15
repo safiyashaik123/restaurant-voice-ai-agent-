@@ -61,6 +61,7 @@ def main() -> int:
         service.transcribe(entries[0][0], initial_prompt=args.initial_prompt)
         print(f"Cold first transcription: {time.perf_counter() - start:.3f} s (excluded from WER and warm timing)")
         total_errors = total_words = 0
+        raw_errors = raw_words = 0
         total_seconds = 0.0
         for path, reference in entries:
             start = time.perf_counter()
@@ -68,12 +69,18 @@ def main() -> int:
             elapsed = time.perf_counter() - start
             expected_words = words(reference)
             errors = word_errors(expected_words, words(hypothesis))
+            raw_reference = reference.split()
+            raw_error = word_errors(raw_reference, hypothesis.split())
+            raw_errors += raw_error
+            raw_words += len(raw_reference)
             total_errors += errors
             total_words += len(expected_words)
             total_seconds += elapsed
-            print(f"\n{path}: {elapsed:.3f} s, WER {errors / len(expected_words):.3f} ({errors}/{len(expected_words)})")
+            print(f"\n{path}: {elapsed:.3f} s, Raw WER {raw_error / len(raw_reference):.3f} ({raw_error}/{len(raw_reference)}), "
+                  f"Normalized WER {errors / len(expected_words):.3f} ({errors}/{len(expected_words)})")
             print(f"  Reference:  {reference}\n  Transcript: {hypothesis}")
-        print(f"\nAggregate WER: {total_errors / total_words:.3f} ({total_errors}/{total_words}); "
+        print(f"\nAggregate Raw WER: {raw_errors / raw_words:.3f} ({raw_errors}/{raw_words}); "
+              f"Aggregate Normalized WER: {total_errors / total_words:.3f} ({total_errors}/{total_words}); "
               f"warm total: {total_seconds:.3f} s; warm mean: {total_seconds / len(entries):.3f} s")
         return 0
     except (STTError, OSError, ValueError) as exc:

@@ -14,6 +14,12 @@ from src.services.llm_service import OllamaConnectionError, OllamaService
 def agent(tmp_path):
     path = tmp_path / "restaurant.db"
     init_database(path, seed=True)
+    # Synthetic test values are isolated from seed and restaurant data.
+    with create_connection(path) as conn:
+        conn.executemany("UPDATE menu_items SET price = ? WHERE name = ?", [
+            (299, 'Bruschetta Classica'), (449, 'Caprese Salad'),
+            (449, 'Margherita Pizza'), (299, 'Classic Tiramisu'),
+        ])
     llm = MagicMock(spec=OllamaService)
     llm.chat.side_effect = OllamaConnectionError("offline")
     # A model response must not override verified facts.
@@ -58,6 +64,14 @@ def test_untracked_ambiguous_or_multiple_allergens_do_not_return_safe_list(agent
     assert result.intent == Intent.ALLERGEN_INQUIRY
     assert result.is_fallback and result.needs_clarification
     assert not result.data or 'safe_items' not in result.data
+
+
+def test_multiple_tracked_allergens_require_clarification(agent):
+    result = agent.handle_message('Does the Margherita Pizza contain any dairy or gluten?')
+    assert result.intent == Intent.ALLERGEN_INQUIRY
+    assert result.is_fallback and result.needs_clarification
+    assert 'cannot verify' in result.text.lower()
+    assert 'staff' in result.text.lower()
 
 
 def test_crud_rejects_untracked_allergen(agent):
@@ -108,10 +122,37 @@ def test_unknown_dish_with_allergen_is_not_treated_as_general_filter(agent):
     assert ingredients.is_fallback and 'could not find' in ingredients.text.lower()
 
 
+def test_menu_prices_display_rupee_symbol(agent):
+    item = agent.handle_message('How much is Caprese Salad?')
+    assert '₹449' in item.text and '$' not in item.text
+    category = agent.handle_message('What appetizers do you have?')
+    assert '₹299' in category.text and '₹449' in category.text
+    assert '$' not in category.text
+    general = agent.handle_message('What is on the menu?')
+    assert '₹' in general.text and '$' not in general.text
+
+
+@pytest.mark.parametrize(('price', 'display'), [(16, '₹16'), (16.5, '₹16.5'), (16.25, '₹16.25')])
+def test_menu_price_display_preserves_database_value(agent, price, display):
+    conn = create_connection(agent.db_path)
+    try:
+        conn.execute("UPDATE menu_items SET price = ? WHERE name = ?", (price, 'Caprese Salad'))
+        conn.commit()
+    finally:
+        conn.close()
+    result = agent.handle_message('How much is Caprese Salad?')
+    assert result.data['price'] == price and display in result.text and '$' not in result.text
+    conn = create_connection(agent.db_path)
+    try:
+        assert conn.execute("SELECT price FROM menu_items WHERE name = ?", ('Caprese Salad',)).fetchone()[0] == price
+    finally:
+        conn.close()
+
+
 def test_explicit_change_of_topic_does_not_reuse_pending_intent(agent):
     agent.handle_message('What ingredients do you use?', session_id='one')
     result = agent.handle_message('How much is Margherita Pizza?', session_id='one')
-    assert result.intent == Intent.MENU_INQUIRY and '$16.00' in result.text
+    assert result.intent == Intent.MENU_INQUIRY and '₹449' in result.text
 
 
 def test_follow_up_alternate_wording_and_unknown_answer(agent):
@@ -139,7 +180,7 @@ def test_ambiguous_menu_intent_uses_at_most_one_model_call(agent):
     agent.llm.chat.side_effect = None
     agent.llm.chat.return_value.content = '{"intent":"menu_inquiry","menu_item_name":"Margherita Pizza"}'
     response = agent.handle_message('Tell me about the pizza')
-    assert response.intent == Intent.MENU_INQUIRY and '$16.00' in response.text
+    assert response.intent == Intent.MENU_INQUIRY and '₹449' in response.text
     assert agent.llm.chat.call_count == 1
     agent.llm.generate_restaurant_reply.assert_not_called()
 

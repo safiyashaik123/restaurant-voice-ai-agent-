@@ -9,11 +9,13 @@ Enforces:
 
 from datetime import datetime, timedelta
 import re
+import hashlib
+import secrets
 import sqlite3
 from typing import Any, Dict, List, Optional
 
 from src.core.config import config
-from src.core.reservation_policy import validate_indian_mobile, validate_reservation_slot
+from src.core.reservation_policy import validate_customer_name, validate_indian_mobile, validate_reservation_slot
 
 
 def _normalize_name(name: str) -> str:
@@ -288,8 +290,10 @@ def find_available_tables(
     
     Uses configurable slot duration for conflict detection.
     """
-    if party_size <= 0:
+    if type(party_size) is not int or party_size <= 0:
         raise ValueError("Party size must be at least 1 person.")
+    if party_size > 9223372036854775807:
+        return []
         
     slot_duration = duration_minutes if duration_minutes is not None else config.default_reservation_duration_minutes
     req_date = _parse_date(reservation_date)
@@ -393,19 +397,30 @@ def _create_reservation_in_transaction(
 ) -> Dict[str, Any]:
     """Validate, allocate and insert while a transaction is active."""
     # 1. Input sanitization & validation
-    name_clean = customer_name.strip()
-
-    if not name_clean:
-        raise ValueError("Customer name cannot be empty.")
+    name_clean = validate_customer_name(customer_name)
     phone_clean = validate_indian_mobile(customer_phone)
-    if party_size <= 0:
+    if type(party_size) is not int or party_size <= 0:
         raise ValueError("Party size must be a positive integer.")
+    if party_size > 9223372036854775807:
+        raise ValueError("No tables available for that party size.")
         
     slot_duration = duration_minutes if duration_minutes is not None else config.default_reservation_duration_minutes
     
     # Validate date, interval and operating hours against the shared policy.
     validate_reservation_slot(reservation_date, reservation_time, duration_minutes=slot_duration)
         
+    # Under the immediate write transaction, reject an exact repeated booking.
+    # Normalize the optional country prefix for this comparison only.
+    mobile = phone_clean.removeprefix("+91")
+    duplicate = conn.execute(
+        "SELECT 1 FROM reservations WHERE status='confirmed' AND reservation_date=? "
+        "AND reservation_time=? AND (customer_phone=? OR customer_phone=?) "
+        "AND customer_name=? COLLATE NOCASE AND party_size=? LIMIT 1",
+        (reservation_date.strip(), reservation_time.strip(), mobile, '+91' + mobile, name_clean, party_size),
+    ).fetchone()
+    if duplicate:
+        raise ValueError("A reservation for this phone and time already exists.")
+
     # 2. Check table availability
     available_tables = find_available_tables(
         conn,
@@ -448,8 +463,13 @@ def _create_reservation_in_transaction(
         )
     )
     res_row = cursor.fetchone()
-    
+    # Additive, transactional upgrade: existing reservations and tables are untouched.
+    conn.execute("CREATE TABLE IF NOT EXISTS reservation_access (reservation_id INTEGER PRIMARY KEY REFERENCES reservations(id) ON DELETE CASCADE, secret_hash TEXT NOT NULL)")
+    access_code = secrets.token_urlsafe(24)
+    conn.execute("INSERT INTO reservation_access VALUES (?, ?)", (res_row["id"], hashlib.sha256(access_code.encode('ascii')).hexdigest()))
+
     return {
+        "access_code": access_code,
         "reservation_id": res_row["id"],
         "table_id": assigned_table["id"],
         "table_number": assigned_table["table_number"],
@@ -506,3 +526,23 @@ def cancel_reservation(
         (reservation_id,)
     )
     return cursor.rowcount > 0
+
+
+def verified_reservation(conn: sqlite3.Connection, reservation_id: int, access_code: str) -> Optional[Dict[str, Any]]:
+    """Return only a reservation whose independently generated secret matches.
+
+    Older bookings have no credential and must be handled by restaurant staff.
+    """
+    import hmac
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='reservation_access'").fetchone():
+        return None
+    row = conn.execute("SELECT secret_hash FROM reservation_access WHERE reservation_id=?", (reservation_id,)).fetchone()
+    digest = hashlib.sha256(access_code.encode('utf-8')).hexdigest()
+    expected = row['secret_hash'] if row else '0' * 64
+    if not hmac.compare_digest(digest, expected) or row is None:
+        return None
+    item = get_reservation_by_id(conn, reservation_id)
+    if not item:
+        return None
+    return {"reservation_id": item['id'], "reservation_date": item['reservation_date'],
+            "reservation_time": item['reservation_time'], "party_size": item['party_size'], "status": item['status']}

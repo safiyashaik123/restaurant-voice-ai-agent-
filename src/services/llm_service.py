@@ -72,8 +72,8 @@ CORE RESPONSIBILITIES:
 VOICE-FIRST COMMUNICATION RULES:
 - Keep responses concise, clear, and conversational (1 to 3 sentences maximum).
 - Speak naturally. Never use markdown formatting (no asterisks, bullet points, headers, or tables).
-- Never use emojis or special characters, as they sound awkward when read aloud by text-to-speech.
-- Present numbers and prices conversationally (e.g., "nine dollars and fifty cents" or "$9.50").
+- Never use emojis; avoid special characters except the Indian rupee symbol for prices.
+- Present menu prices in Indian rupees with the ₹ symbol, never dollars (e.g., "₹449").
 
 STRICT SAFETY AND GROUNDING INVARIANTS:
 - NEVER invent, assume, or extrapolate menu dishes, recipe ingredients, or allergen statuses.
@@ -242,6 +242,8 @@ class OllamaService:
             )
 
         content = content_val.strip()
+        if isinstance(data.get('eval_duration'), (int, float)):
+            logger.debug('Ollama inference: %.1f ms', data['eval_duration'] / 1_000_000)
 
         # Extract timing metrics (durations are in nanoseconds in Ollama)
         total_duration_ms = data.get("total_duration", 0) / 1_000_000.0 if isinstance(data.get("total_duration"), (int, float)) else 0.0

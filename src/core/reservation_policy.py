@@ -8,7 +8,17 @@ from zoneinfo import ZoneInfo
 from src.core.config import config
 
 PHONE_ERROR = "Enter a valid Indian mobile number: 10 digits starting with 6, 7, 8 or 9, optionally prefixed by +91."
+NAME_ERROR = "Enter a name containing letters, spaces, apostrophes, periods or hyphens."
 SLOT_ERROR = "Choose a future reservation time on an available operating hours interval."
+
+
+def validate_customer_name(name: str) -> str:
+    import unicodedata
+    value = name.strip()
+    if (not value or len(value) > 200 or not any(c.isalpha() for c in value)
+            or any(not (c.isalpha() or unicodedata.category(c).startswith("M") or c in " '-.’") for c in value)):
+        raise ValueError(NAME_ERROR)
+    return value
 
 
 def validate_indian_mobile(phone: str) -> str:
@@ -46,6 +56,12 @@ def reservation_slots(day: date, *, now: Optional[datetime] = None,
     if current.tzinfo is None or current.utcoffset() is None:
         raise ValueError("Current time must be timezone-aware.")
     current = current.astimezone(zone)
+    horizon = config.reservation_max_advance_days
+    if horizon is not None:
+        if horizon < 0:
+            raise ValueError("RESERVATION_MAX_ADVANCE_DAYS must be non-negative")
+        if day > current.date() + timedelta(days=horizon):
+            return []
     duration = config.default_reservation_duration_minutes if duration_minutes is None else duration_minutes
     interval = 30
     if duration <= 0:
