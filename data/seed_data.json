@@ -21,7 +21,7 @@
       "name": "Bruschetta Classica",
       "category": "Appetizers",
       "description": "Toasted artisan sourdough bread topped with ripe Roma tomatoes, garlic, extra virgin olive oil, and fresh basil.",
-      "price": 9.50,
+      "price": 149,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -41,7 +41,7 @@
       "name": "Crispy Calamari",
       "category": "Appetizers",
       "description": "Tender wild-caught squid rings dusted with seasoned cornstarch, flash-fried and served with lemon wedges and house garlic aioli.",
-      "price": 14.00,
+      "price": 249,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -64,7 +64,7 @@
       "name": "Caprese Salad",
       "category": "Appetizers",
       "description": "Thick slices of fresh Italian buffalo mozzarella layered with heirloom tomatoes, fresh basil leaves, and balsamic reduction.",
-      "price": 12.50,
+      "price": 199,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -84,7 +84,7 @@
       "name": "Margherita Pizza",
       "category": "Mains",
       "description": "Classic Neapolitan style pizza with San Marzano tomato sauce, fresh Fior di Latte mozzarella, fresh basil, and extra virgin olive oil.",
-      "price": 16.00,
+      "price": 249,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -106,7 +106,7 @@
       "name": "Grilled Salmon Fillet",
       "category": "Mains",
       "description": "Pan-seared Atlantic salmon fillet served with lemon herb butter sauce, steamed asparagus, and roasted baby potatoes.",
-      "price": 24.50,
+      "price": 399,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -131,7 +131,7 @@
       "name": "Rigatoni Bolognese",
       "category": "Mains",
       "description": "Slow-simmered rich beef and pancetta ragù served over al dente durum wheat rigatoni, topped with aged Parmigiano-Reggiano.",
-      "price": 18.50,
+      "price": 279,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -157,7 +157,7 @@
       "name": "Vegan Mediterranean Bowl",
       "category": "Mains",
       "description": "Warm organic tricolor quinoa, spiced roasted chickpeas, ripe avocado, baby spinach, cucumber ribbons, and a creamy lemon tahini dressing.",
-      "price": 15.50,
+      "price": 229,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -181,7 +181,7 @@
       "name": "Chef's Daily Rotating Special",
       "category": "Mains",
       "description": "Market-fresh daily creation curated by our head chef with seasonal regional produce. Ask server for today's recipe details.",
-      "price": 26.00,
+      "price": 449,
       "is_available": true,
       "allergen_status": "unverified",
       "ingredients": [
@@ -193,7 +193,7 @@
       "name": "Classic Tiramisu",
       "category": "Desserts",
       "description": "Traditional Italian dessert with Savoiardi ladyfingers soaked in dark espresso, layered with whipped mascarpone cream and dusted with Dutch cocoa.",
-      "price": 8.50,
+      "price": 179,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -214,7 +214,7 @@
       "name": "Artisan Sorbet Trio",
       "category": "Desserts",
       "description": "Refreshing dairy-free trio of mango, raspberry, and Sicilian lemon sorbets garnished with fresh berries.",
-      "price": 7.50,
+      "price": 129,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -231,7 +231,7 @@
       "name": "Fresh Mint Lemonade",
       "category": "Beverages",
       "description": "House-squeezed lemon juice shaken with fresh crushed spearmint leaves, pure cane sugar syrup, and iced sparkling water.",
-      "price": 4.50,
+      "price": 99,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -247,7 +247,7 @@
       "name": "Iced Oat Milk Latte",
       "category": "Beverages",
       "description": "Double shot of rich espresso poured over chilled artisanal oat milk and served over ice.",
-      "price": 5.00,
+      "price": 149,
       "is_available": true,
       "allergen_status": "verified",
       "ingredients": [
@@ -261,11 +261,35 @@
     }
   ],
   "tables": [
-    { "table_number": "T1", "capacity": 2, "is_active": true },
-    { "table_number": "T2", "capacity": 2, "is_active": true },
-    { "table_number": "T3", "capacity": 4, "is_active": true },
-    { "table_number": "T4", "capacity": 4, "is_active": true },
-    { "table_number": "T5", "capacity": 6, "is_active": true },
-    { "table_number": "T6", "capacity": 8, "is_active": true }
+    {
+      "table_number": "T1",
+      "capacity": 2,
+      "is_active": true
+    },
+    {
+      "table_number": "T2",
+      "capacity": 2,
+      "is_active": true
+    },
+    {
+      "table_number": "T3",
+      "capacity": 4,
+      "is_active": true
+    },
+    {
+      "table_number": "T4",
+      "capacity": 4,
+      "is_active": true
+    },
+    {
+      "table_number": "T5",
+      "capacity": 6,
+      "is_active": true
+    },
+    {
+      "table_number": "T6",
+      "capacity": 8,
+      "is_active": true
+    }
   ]
 }

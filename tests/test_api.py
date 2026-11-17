@@ -329,7 +329,7 @@ def test_slots_and_reservation_policy_are_consistent(setup, monkeypatch):
     assert slots.status_code == 200
     assert slots.json()['slots'][0] == '10:00' and slots.json()['slots'][-1] == '21:30'
     assert setup.client.get('/api/reservations/slots', params={'date': 'bad'}).status_code == 422
-    for fields in ({'customer_phone': '98765-43210'}, {'reservation_time': '18:15'},
+    for fields in ({'customer_phone': '9876-54321'}, {'reservation_time': '18:15'},
                    {'reservation_time': '22:30'}, {'reservation_date': (restaurant_today() - timedelta(days=1)).isoformat()}):
         response = setup.client.post('/api/reservations', json=booking(**fields))
         assert response.status_code == 422
@@ -346,7 +346,7 @@ def test_chat_does_not_accept_llm_normalized_invalid_phone(setup):
                      'customer_name': 'Alice', 'customer_phone': None}
     setup.backend.agent.llm.chat.side_effect = None
     setup.backend.agent.llm.chat.return_value = SimpleNamespace(content='{"intent":"reservation_request","customer_phone":"9876543210"}')
-    result = setup.backend.agent.handle_message('Phone is 98765-43210', session_id='phone-policy')
+    result = setup.backend.agent.handle_message('Phone is 9876-54321', session_id='phone-policy')
     assert result.needs_clarification and 'Indian mobile' in result.text
     assert session.slots['customer_phone'] is None
 
@@ -463,6 +463,7 @@ def test_private_lookup_and_confirmed_cancellation(setup):
     assert wrong.status_code == missing.status_code == 404 and wrong.json() == missing.json()
     found = setup.client.post('/api/reservations/lookup', json=credentials)
     assert found.status_code == 200 and found.json()['status'] == 'confirmed'
+    assert found.json()['table_number'] == created['table_number']
     assert 'customer_phone' not in found.json() and 'customer_name' not in found.json()
     assert setup.client.post('/api/reservations/cancel', json={**credentials, 'confirm': False}).status_code == 422
     assert setup.client.post('/api/reservations/cancel', json={**credentials, 'confirm': True}).json()['status'] == 'cancelled'

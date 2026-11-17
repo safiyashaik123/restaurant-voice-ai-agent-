@@ -8,12 +8,34 @@ from src.core.config import config
 from src.core.reservation_policy import reservation_slots, validate_indian_mobile, validate_reservation_slot
 
 
-@pytest.mark.parametrize("phone", ["9876543210", "+916123456789"])
-def test_valid_indian_mobile(phone):
-    assert validate_indian_mobile(phone) == phone
+@pytest.mark.parametrize(
+    ("phone", "expected"),
+    [
+        ("9876543210", "9876543210"),
+        ("+916123456789", "+916123456789"),
+        ("987-654-3210", "9876543210"),
+        ("987 654 3210", "9876543210"),
+        ("(987) 654-3210", "9876543210"),
+        ("+91 987-654-3210", "+919876543210"),
+    ],
+)
+def test_valid_indian_mobile(phone, expected):
+    assert validate_indian_mobile(phone) == expected
 
 
-@pytest.mark.parametrize("phone", ["1234567890", "98765-43210", "91 9876543210", "+9198765432100", "９876543210", " 9876543210"])
+@pytest.mark.parametrize(
+    "phone",
+    [
+        "1234567890",
+        "987654321",
+        "98765432100",
+        "91 9876543210",
+        "+9198765432100",
+        "98765432AB",
+        "++919876543210",
+        "+91 1234567890",
+    ],
+)
 def test_invalid_indian_mobile(phone):
     with pytest.raises(ValueError, match="Indian mobile"):
         validate_indian_mobile(phone)

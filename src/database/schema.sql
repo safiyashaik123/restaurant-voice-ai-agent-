@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS reservations (
     party_size INTEGER NOT NULL CHECK (party_size > 0),
     reservation_date TEXT NOT NULL, -- Format: YYYY-MM-DD
     reservation_time TEXT NOT NULL, -- Format: HH:MM (24-hour)
+    duration_minutes INTEGER NOT NULL DEFAULT 90 CHECK (duration_minutes > 0),
     status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled')),
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );

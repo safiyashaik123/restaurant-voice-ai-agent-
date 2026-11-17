@@ -169,7 +169,10 @@ def check_allergens_for_item(
     elif allergens:
         message = f"'{item['name']}' contains the following verified allergens: {', '.join(allergens)}."
     else:
-        message = f"'{item['name']}' has verified allergen records and does not contain tracked major allergens."
+        message = (
+        f"No allergens are recorded in the verified allergen database for '{item['name']}'. "
+        "Please confirm ingredients and cross-contact with restaurant staff."
+        )
         
     return {
         "item_name": item["name"],
@@ -240,6 +243,50 @@ def find_safe_items_for_allergens(
     cursor.execute(query, clean_allergens)
     return [dict(row) for row in cursor.fetchall()]
 
+
+def find_items_containing_allergen(
+    conn: sqlite3.Connection,
+    allergen_name: str
+) -> List[Dict[str, Any]]:
+    """Find available, verified dishes that contain a specified allergen.
+
+    Unverified dishes are excluded because their allergen information
+    cannot be treated as authoritative.
+    """
+    clean_allergen = allergen_name.strip().lower()
+
+    if not clean_allergen:
+        raise ValueError("Please specify a valid allergen.")
+
+    tracked = {
+        row["name"].lower(): row["name"]
+        for row in conn.execute("SELECT name FROM allergens")
+    }
+
+    if clean_allergen not in tracked:
+        raise ValueError("Allergen is not tracked in the restaurant database.")
+
+    query = """
+        SELECT
+            m.id,
+            c.name AS category,
+            m.name,
+            m.description,
+            m.price,
+            m.allergen_status
+        FROM menu_items m
+        JOIN categories c ON m.category_id = c.id
+        JOIN menu_item_allergens ma ON m.id = ma.menu_item_id
+        JOIN allergens a ON ma.allergen_id = a.id
+        WHERE m.is_available = 1
+          AND m.allergen_status = 'verified'
+          AND LOWER(a.name) = ?
+        ORDER BY c.id ASC, m.name ASC;
+    """
+
+    cursor = conn.cursor()
+    cursor.execute(query, (clean_allergen,))
+    return [dict(row) for row in cursor.fetchall()]
 
 # ---------------------------------------------------------------------------
 # Table Availability & Reservation Services
@@ -328,7 +375,7 @@ def find_available_tables(
     
     cursor.execute(
         f"""
-        SELECT table_id, reservation_time
+        SELECT table_id, reservation_time, duration_minutes
         FROM reservations
         WHERE reservation_date = ?
         AND status = 'confirmed'
@@ -339,14 +386,15 @@ def find_available_tables(
     existing_bookings = cursor.fetchall()
     
     # Identify tables with time overlaps using configurable slot duration
+    # Identify tables with time overlaps using each booking's own duration
     conflicted_table_ids = set()
     for row in existing_bookings:
         tbl_id = row["table_id"]
         res_time = _parse_time(row["reservation_time"])
         res_start = datetime.combine(req_date, res_time)
-        res_end = res_start + timedelta(minutes=slot_duration)
-        
-        # Overlap condition: req_start < res_end and req_end > res_start
+        res_end = res_start + timedelta(minutes=row["duration_minutes"])
+
+        # Exact end-to-start boundary is available for the next booking.
         if req_start < res_end and req_end > res_start:
             conflicted_table_ids.add(tbl_id)
             
@@ -449,8 +497,9 @@ def _create_reservation_in_transaction(
             party_size,
             reservation_date,
             reservation_time,
+            duration_minutes,
             status
-        ) VALUES (?, ?, ?, ?, ?, ?, 'confirmed')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'confirmed')
         RETURNING id, created_at;
         """,
         (
@@ -459,7 +508,8 @@ def _create_reservation_in_transaction(
             phone_clean,
             party_size,
             reservation_date.strip(),
-            reservation_time.strip()
+            reservation_time.strip(),
+            slot_duration
         )
     )
     res_row = cursor.fetchone()
@@ -545,4 +595,4 @@ def verified_reservation(conn: sqlite3.Connection, reservation_id: int, access_c
     if not item:
         return None
     return {"reservation_id": item['id'], "reservation_date": item['reservation_date'],
-            "reservation_time": item['reservation_time'], "party_size": item['party_size'], "status": item['status']}
+            "reservation_time": item['reservation_time'], "party_size": item['party_size'], "status": item['status'], "table_number": item['table_number'],}

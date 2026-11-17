@@ -14,19 +14,46 @@ SLOT_ERROR = "Choose a future reservation time on an available operating hours i
 
 def validate_customer_name(name: str) -> str:
     import unicodedata
-    value = name.strip()
-    if (not value or len(value) > 200 or not any(c.isalpha() for c in value)
-            or any(not (c.isalpha() or unicodedata.category(c).startswith("M") or c in " '-.’") for c in value)):
+
+    value = name.strip().rstrip(",;:!?").strip()
+
+    if (
+        not value
+        or len(value) > 200
+        or not any(c.isalpha() for c in value)
+        or any(
+            not (
+                c.isalpha()
+                or unicodedata.category(c).startswith("M")
+                or c in " '-.’"
+            )
+            for c in value
+        )
+    ):
         raise ValueError(NAME_ERROR)
+
     return value
 
 
 def validate_indian_mobile(phone: str) -> str:
-    """Return a valid number without altering digits or the optional +91 prefix."""
-    value = phone
-    if not re.fullmatch(r"(?:\+91)?[6-9][0-9]{9}", value):
+    """Validate and normalize an Indian mobile number."""
+    value = phone.strip()
+
+    # Allow digits and common formatting characters only.
+    if not re.fullmatch(r"\+?[0-9().\s-]+", value):
         raise ValueError(PHONE_ERROR)
-    return value
+
+    # Preserve an optional +91 country code.
+    has_country_code = value.startswith("+91")
+    number = value[3:] if has_country_code else value
+
+    # Remove formatting characters before validating.
+    digits = re.sub(r"\D", "", number)
+
+    if not re.fullmatch(r"[6-9][0-9]{9}", digits):
+        raise ValueError(PHONE_ERROR)
+
+    return ("+91" if has_country_code else "") + digits
 
 
 def parse_reservation_date(value: str) -> date:

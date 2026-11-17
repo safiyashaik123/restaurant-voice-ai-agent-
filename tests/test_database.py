@@ -38,14 +38,14 @@ from src.database.crud import (
 
 class TestDatabaseLayer(unittest.TestCase):
     """Test suite executing against an isolated temporary in-memory database."""
-    
+
     def setUp(self):
         """Create fresh in-memory database with schema and seed data for each test."""
         # Use a unique URI memory database per test to guarantee complete test isolation
         self.db_uri = f"file:memdb_{uuid.uuid4().hex}?mode=memory&cache=shared"
         self.conn = create_connection(self.db_uri)
         init_database(db_path=self.db_uri, seed=True)
-        
+
     def tearDown(self):
         """Close connection and clean up."""
         self.conn.close()
@@ -127,7 +127,7 @@ class TestDatabaseLayer(unittest.TestCase):
         """Non-existent items must return None to trigger safe fallbacks."""
         item = get_menu_item_by_name(self.conn, "Lobster Thermidor")
         self.assertIsNone(item)
-        
+
         ingredients = get_ingredients_for_item(self.conn, "Lobster Thermidor")
         self.assertIsNone(ingredients)
 
@@ -150,7 +150,8 @@ class TestDatabaseLayer(unittest.TestCase):
         self.assertTrue(result["is_verified"])
         self.assertEqual(result["allergen_status"], "verified")
         self.assertEqual(result["allergens"], [])
-        self.assertIn("verified allergen records", result["message"])
+        self.assertIn("no allergens are recorded", result["message"].lower())
+        self.assertIn("cross-contact", result["message"].lower())
 
     def test_unverified_dish_never_treated_as_allergen_free(self):
         """Unverified dish must return is_verified=False and a cautionary disclaimer message."""
@@ -164,15 +165,15 @@ class TestDatabaseLayer(unittest.TestCase):
         """find_safe_items_for_allergens must NEVER include unverified dishes."""
         safe_items = find_safe_items_for_allergens(self.conn, ["Gluten", "Dairy"])
         safe_names = [item["name"] for item in safe_items]
-        
+
         # Contains Gluten/Dairy -> must be excluded
         self.assertNotIn("Margherita Pizza", safe_names)
         self.assertNotIn("Bruschetta Classica", safe_names)
         self.assertNotIn("Classic Tiramisu", safe_names)
-        
+
         # Unverified dish -> must strictly NOT be included even if no allergens are explicitly mapped
         self.assertNotIn("Chef's Daily Rotating Special", safe_names)
-        
+
         # Verified allergen-free dish -> must be included
         self.assertIn("Artisan Sorbet Trio", safe_names)
         self.assertIn("Fresh Mint Lemonade", safe_names)
@@ -218,7 +219,7 @@ class TestDatabaseLayer(unittest.TestCase):
         self.assertEqual(res["status"], "confirmed")
         self.assertEqual(res["customer_name"], "Alice Smith")
         self.assertGreaterEqual(res["table_capacity"], 4)
-        
+
         # Verify retrieved from DB
         stored = get_reservation_by_id(self.conn, res["reservation_id"])
         self.assertEqual(stored["customer_name"], "Alice Smith")
@@ -245,7 +246,7 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_time="18:00",
             duration_minutes=90
         )
-        
+
         # Attempting a 3rd booking for 2 pax at 18:30 (overlapping) will bump to next available table (4-pax)
         res3 = create_reservation(
             self.conn,
@@ -257,7 +258,7 @@ class TestDatabaseLayer(unittest.TestCase):
             duration_minutes=90
         )
         self.assertGreaterEqual(res3["table_capacity"], 4)
-        
+
         # Verify assigned table is distinct
         booked_table_ids = {res1["table_id"], res2["table_id"], res3["table_id"]}
         self.assertEqual(len(booked_table_ids), 3)
@@ -274,7 +275,7 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_time="18:00",
             duration_minutes=60
         )
-        
+
         # Second booking at 19:00 on the same date for 6 pax must succeed (no overlap)
         res2 = create_reservation(
             self.conn,
@@ -285,7 +286,7 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_time="19:00",
             duration_minutes=60
         )
-        
+
         self.assertEqual(res1["table_id"], res2["table_id"])
         self.assertEqual(res2["status"], "confirmed")
 
@@ -301,7 +302,7 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_time="18:00",
             duration_minutes=60  # Only booked 18:00 - 19:00
         )
-        
+
         # Under 60 min duration, 19:00 is available for the 8-seat table
         avail_60 = find_available_tables(
             self.conn,
@@ -311,8 +312,8 @@ class TestDatabaseLayer(unittest.TestCase):
             duration_minutes=60
         )
         self.assertEqual(len(avail_60), 1)
-        
-        # Under 90 min duration, the 18:00 booking would run until 19:30, conflicting with 19:00!
+
+        # Existing booking ends at 19:00, so a new 90-minute booking can start then.
         avail_90 = find_available_tables(
             self.conn,
             party_size=8,
@@ -320,7 +321,81 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_time="19:00",
             duration_minutes=90
         )
-        self.assertEqual(len(avail_90), 0)
+        self.assertEqual(len(avail_90), 1)
+
+
+
+    def test_ninety_minute_booking_conflicts_one_minute_before_end(self):
+        """A new booking at 19:29 conflicts with a 90-minute booking starting at 18:00."""
+        booking_date = (restaurant_today() + timedelta(days=2)).isoformat()
+
+        create_reservation(
+            self.conn,
+            customer_name="Boundary Customer",
+            customer_phone="9870000311",
+            party_size=8,
+            reservation_date=booking_date,
+            reservation_time="18:00",
+            duration_minutes=90,
+        )
+
+        available = find_available_tables(
+            self.conn,
+            party_size=8,
+            reservation_date=booking_date,
+            reservation_time="19:29",
+            duration_minutes=90,
+        )
+
+        self.assertEqual(len(available), 0)
+
+    def test_ninety_minute_booking_allows_exact_end_boundary(self):
+        """A new booking at 19:30 is allowed when the previous booking ends then."""
+        booking_date = (restaurant_today() + timedelta(days=2)).isoformat()
+
+        first = create_reservation(
+            self.conn,
+            customer_name="Boundary Customer One",
+            customer_phone="9870000312",
+            party_size=8,
+            reservation_date=booking_date,
+            reservation_time="18:00",
+            duration_minutes=90,
+        )
+
+        second = create_reservation(
+            self.conn,
+            customer_name="Boundary Customer Two",
+            customer_phone="9870000313",
+            party_size=8,
+            reservation_date=booking_date,
+            reservation_time="19:30",
+            duration_minutes=90,
+        )
+
+        self.assertEqual(first["table_id"], second["table_id"])
+
+    def test_reservation_duration_is_persisted(self):
+        """The requested duration is stored in the reservation database row."""
+        booking_date = (restaurant_today() + timedelta(days=2)).isoformat()
+
+        reservation = create_reservation(
+            self.conn,
+            customer_name="Duration Customer",
+            customer_phone="9870000314",
+            party_size=8,
+            reservation_date=booking_date,
+            reservation_time="18:00",
+            duration_minutes=60,
+        )
+
+        row = self.conn.execute(
+            "SELECT duration_minutes FROM reservations WHERE id = ?",
+            (reservation["reservation_id"],),
+        ).fetchone()
+
+        self.assertEqual(row["duration_minutes"], 60)
+
 
     # -----------------------------------------------------------------------
     # 7. Operating Hours & Input Validation Tests
@@ -342,10 +417,10 @@ class TestDatabaseLayer(unittest.TestCase):
         """Empty names, invalid phones, or negative party sizes must be rejected."""
         with self.assertRaises(ValueError):
             create_reservation(self.conn, "", "9870000501", 2, (restaurant_today() + timedelta(days=3)).isoformat(), "18:00")
-            
+
         with self.assertRaises(ValueError):
             create_reservation(self.conn, "Valid Name", "123", 2, (restaurant_today() + timedelta(days=3)).isoformat(), "18:00")
-            
+
         with self.assertRaises(ValueError):
             create_reservation(self.conn, "Valid Name", "9870000502", 0, (restaurant_today() + timedelta(days=3)).isoformat(), "18:00")
 
@@ -362,7 +437,7 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_date=(restaurant_today() + timedelta(days=4)).isoformat(),
             reservation_time="18:00"
         )
-        
+
         # Before cancel: 8-pax table is booked
         avail_before = find_available_tables(
             self.conn,
@@ -371,11 +446,11 @@ class TestDatabaseLayer(unittest.TestCase):
             reservation_time="18:00"
         )
         self.assertEqual(len(avail_before), 0)
-        
+
         # Cancel reservation
         success = cancel_reservation(self.conn, res["reservation_id"])
         self.assertTrue(success)
-        
+
         # After cancel: table is available again
         avail_after = find_available_tables(
             self.conn,

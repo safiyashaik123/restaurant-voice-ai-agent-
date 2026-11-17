@@ -27,6 +27,22 @@ def init_database(
         with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
             schema_sql = f.read()
         conn.executescript(schema_sql)
+                # 1.1 Migrate existing databases
+        reservation_columns = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(reservations)"
+            ).fetchall()
+        }
+
+        if "duration_minutes" not in reservation_columns:
+            conn.execute(
+                """
+                ALTER TABLE reservations
+                ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 90
+                CHECK (duration_minutes > 0)
+                """
+            )
         
         # 2. Check if already seeded
         cursor = conn.cursor()

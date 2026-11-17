@@ -1,9 +1,9 @@
-# PROGRESS.md — Restaurant Voice AI Agent
+# PROGRESS.md â€” Restaurant Voice AI Agent
 
 ## Project Status Overview
 
-- **Status:** Phases 0–4 complete; Phase 5 implemented and locally verified; Phase 6 frontend implemented with automated checks, with real browser and live voice end-to-end verification pending; Phase 7 (QA and benchmarking) pending.
-- **Last Updated:** 2026-11-10
+- **Status:** Phases 0â€“6 complete; Phase 7 QA and failure-handling checks verified, comprehensive benchmarking pending.
+- **Last Updated:** 2026-11-17
 
 ---
 
@@ -32,7 +32,7 @@
   - [x] Executed full database unit test suite: **21 / 21 unit tests passed** in `tests/test_database.py`.
   - [x] Persistent database operational at `data/restaurant.db`.
 
-- [x] **Phase 2 – Step 1 & Step 2: Local LLM Service (Verified)**
+- [x] **Phase 2 â€“ Step 1 & Step 2: Local LLM Service (Verified)**
   - [x] Verified local Ollama daemon and `qwen2.5:1.5b` model inference.
   - [x] Implemented modular LLM service (`src/services/llm_service.py`):
     - Connects to local Ollama API via `/api/chat`.
@@ -55,7 +55,7 @@
     - Measured latency: ~3.25s - 4.01s for conversational turn on CPU (~23 tokens/sec).
   - [x] Re-ran Phase 1 database test suite: **21 / 21 tests passed** (0.479s), verifying database layer remains intact.
 
-- [x] **Phase 2 – Step 3: Structured Tool Calling & Grounded Agent Router (Verified)**
+- [x] **Phase 2 â€“ Step 3: Structured Tool Calling & Grounded Agent Router (Verified)**
   - [x] Implemented modular Grounded Agent service (`src/services/agent_service.py`):
     - Supported 8 standardized customer intents: `greeting`, `menu_inquiry`, `ingredient_inquiry`, `allergen_inquiry`, `availability_inquiry`, `reservation_request`, `reservation_cancellation`, `unknown`.
     - Extracted entities: `menu_item_name`, `allergen_name`, `requested_reservation_date`, `requested_reservation_time`, `number_of_guests`, `reservation_identifier`, `customer_name`, `customer_phone`.
@@ -95,28 +95,50 @@
   - [x] Run local TTS tests: **11 / 11 passed**.
   - [x] Run the complete local test suite: **104 / 104 passed in 46.09 seconds**.
 
-- [x] **Phase 5: FastAPI Backend Orchestration (Implemented and locally verified)**
+- [x] **Phase 5: FastAPI Backend Orchestration (Implemented and fully verified)**
+
   - [x] Build FastAPI endpoints (`/api/health`, `/api/voice`, `/api/chat`, `/api/menu`, `/api/reservations`) with schemas, configurable CORS, and bounded audio uploads.
   - [x] Wire Audio -> faster-whisper -> Grounded Agent -> SQLite -> Piper TTS -> WAV response using existing services; clean up temporary files.
   - [x] Document startup, configuration, endpoint examples and deployment limitations in `API.md`.
-  - [x] Run API unit tests: **18 passed**; full suite on Python 3.11: **114 passed, 8 skipped, 15 subtests passed**. The skipped integration tests require live Ollama.
+  - [x] Run API unit tests: **18 passed**; full suite on Python 3.11: **114 passed, 8 skipped, 15 subtests passed**.
   - [x] Verify on Windows with Python 3.10: **18 API tests passed**; **122 full regression tests passed in 46.41 seconds**.
-  - [ ] Verify the complete voice pipeline end to end with live local models during Phase 7.
+  - [x] Verify complete voice pipeline with live local models.
+  - [x] Latest backend regression suite: **338 passed, 0 failures**.
 
-- [ ] **Phase 6: React + TypeScript Frontend Development (Implemented; verification in progress)**
+- [x] **C5 â€“ Gluten and Allergen Response Verification**
+
+  - Automated verification: 6 allergen-focused tests passed; full backend suite at that stage: **317 passed, 34 subtests, 0 failures**.
+  - Manual verification: validated six scenarios:
+    1. Bruschetta Classica â€“ correctly identifies gluten.
+    2. Caprese Salad â€“ correctly reports no gluten in verified records.
+    3. Which dishes contain gluten? â€“ correctly lists five verified gluten-containing dishes.
+    4. Fresh Mint Lemonade â€“ distinguishes no recorded allergens from an allergen-free guarantee.
+    5. Chef's Daily Rotating Special â€“ warns that allergen information is unverified and advises asking staff.
+    6. Which dishes are gluten-free? â€“ correctly lists dishes without gluten in verified records and includes a cross-contact warning.
+
+- [x] **Phase 6: React + TypeScript Frontend Development (Implemented and manually verified)**
+
   - [x] Initialize Vite + React + TypeScript + CSS in `frontend/` with setup instructions.
   - [x] Implement assistant chat, microphone capture, status indicators, transcript display and WAV playback.
   - [x] Add menu browsing and reservation views using existing FastAPI endpoints; persist a per-tab session UUID and configure a development proxy.
-  - [x] Run frontend automated checks: **8 tests passed** and production build succeeded. Verify health, menu and chat through the Vite proxy with a temporary seeded database.
-  - [ ] Verify responsive behavior and full live voice, playback and reservation flows in a real browser against the target Windows backend and local models.
+  - [x] Run frontend automated checks: **16 tests passed** and production build succeeded.
+  - [x] Verify health, menu and chat through the Vite proxy with a temporary seeded database.
+  - [x] Verify responsive behavior and live voice, playback and reservation flows in a real browser against the target Windows backend and local models.
 
-- [ ] **Phase 7: Quality Assurance, Benchmarking & Failure Handling (Pending)**
-  - [ ] Benchmark transcription latency and memory usage on CPU.
-  - [ ] Benchmark speech synthesis latency and memory usage on the target machine.
-  - [ ] Validate edge cases: allergen inquiry for unlisted items (safe fallback test), overbooking prevention, invalid date/time formats.
-  - [ ] Profile memory and CPU utilization on the 8 GB machine during full pipeline execution.
-  - [ ] Verify graceful handling when Ollama is unreachable or audio is corrupt.
+- [ ] **Phase 7: Quality Assurance, Failure Handling & Benchmarking (QA verification complete; comprehensive benchmarking pending)**
 
+  - [x] Full backend regression suite: **338 passed**.
+  - [x] Frontend regression suite: **16 passed**.
+  - [x] Frontend production build successful.
+  - [x] Ollama unavailable fallback manually verified.
+  - [x] Silent audio input handling manually verified.
+  - [x] Invalid reservation time rejection and recovery verified.
+  - [x] Voice input and Piper speech output manually verified.
+  - [x] Mobile responsive UI manually verified.
+  - [x] Reservation overlap and availability behavior manually verified.
+  - [x] Git whitespace check passed.
+  - [ ] Comprehensive full-stack peak-memory benchmarking on the 8 GB Windows machine.
+  - [ ] Systematic STT, LLM and TTS latency benchmarking.
 ---
 
 ## Architectural & Technical Decisions Log
@@ -141,17 +163,17 @@
 
 ### Phase 6: reservation policy (in progress)
 
-Added shared Indian-mobile and configured-hours/30-minute slot validation, a date-based slots endpoint, and form integration without redesign. Defaults are 10:00–23:00 with the existing 90-minute reservation duration (last start 21:30). Asia/Kolkata (IST) determines whether a slot is past, independently of server or browser timezone. Slot results describe policy, not table availability. Existing transaction ownership and atomic booking changes are included for review. Streaming and STT evaluation are not part of this stage.
+Added shared Indian-mobile and configured-hours/30-minute slot validation, a date-based slots endpoint, and form integration without redesign. Defaults are 10:00â€“23:00 with the existing 90-minute reservation duration (last start 21:30). Asia/Kolkata (IST) determines whether a slot is past, independently of server or browser timezone. Slot results describe policy, not table availability. Existing transaction ownership and atomic booking changes are included for review. Streaming and STT evaluation are not part of this stage.
 
 Verification in the sandbox: backend `pytest tests/ -q` passed 134 tests, with 8 live-Ollama tests skipped and 15 subtests passed; frontend Vitest passed 10 tests and the production build succeeded. Browser interaction and Windows/model integration were not verified in this stage.
 
-### Phase 6: Stage 3 — grounded menu conversations
+### Phase 6: Stage 3 â€” grounded menu conversations
 
 Inspected the SQLite schema and seed records: there is no verified vegetarian/vegan classification, so dietary discovery honestly refers guests to staff without inventing labels or altering existing database records. Menu and ingredient answers now use deterministic database text; category inquiries list matching available items, and unknown or missing records are acknowledged. Allergen responses distinguish mapped presence, recorded absence for tracked allergens, and unknown/unverified information; ambiguous or multi-allergen requests are not partially filtered, and cross-contact requires staff confirmation. Session-scoped dish context supports follow-ups, and clear menu requests avoid model calls; ambiguous intent extraction retains the configured Qwen model. No UI, STT, or streaming changes were made in this stage.
 
 Stage 3 sandbox verification: 96 focused menu/agent/database/API tests passed; the full backend suite passed 155 tests with 8 live-Ollama tests skipped and 15 subtests passed. Live Qwen interpretation remains unverified in this sandbox.
 
-### Phase 6: Stage 4 — English speech recognition
+### Phase 6: Stage 4 â€” English speech recognition
 
 STT remains faster-whisper with `tiny.en`/CPU/int8 by default, locally cached and lazily loaded once per service. Recognition now explicitly requests English transcription, with configurable positive `WHISPER_BEAM_SIZE` (default 5) and `WHISPER_VAD_FILTER` (default false); `base.en` is an opt-in model. Faster-whisper's PyAV decoder is used once to produce 16 kHz mono audio before inference. No-sample and digitally silent input are rejected before model load; other silence remains subject to model/VAD behavior. The voice API and Piper contract are unchanged. `API.md` contains explicit Windows download and same-recording, separate-process A/B WER/time benchmark instructions; `scripts/benchmark_stt.py` performs the local comparison without downloads. No real model accuracy, latency, or Windows 8 GB RAM benchmark was measured in this sandbox.
 

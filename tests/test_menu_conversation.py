@@ -4,9 +4,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.database.connection import create_connection
-from src.database.crud import find_safe_items_for_allergens
+from src.database.crud import find_safe_items_for_allergens, get_menu_categories, get_menu_items
 from src.database.init_db import init_database
-from src.services.agent_service import AgentService, Intent
+from src.services.agent_service import AgentService, Intent, _format_menu_price
 from src.services.llm_service import OllamaConnectionError, OllamaService
 
 
@@ -191,3 +191,131 @@ def test_unavailable_dish_is_not_claimed_available(agent):
     result = agent.handle_message('How much is Margherita Pizza?')
     assert 'currently unavailable' in result.text
     assert not result.data['is_available']
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_intent"),
+    [
+        ("List all available dishes.", Intent.MENU_INQUIRY),
+        ("What dishes are available today?", Intent.MENU_INQUIRY),
+        ("Show me all available menu items.", Intent.MENU_INQUIRY),
+        ("List all dishes with their prices.", Intent.MENU_INQUIRY),
+        ("Are tables available?", Intent.AVAILABILITY_INQUIRY),
+        ("Is a table available for two?", Intent.AVAILABILITY_INQUIRY),
+        ("Do you have any free tables?", Intent.AVAILABILITY_INQUIRY),
+        ("Is a table available for tonight?", Intent.AVAILABILITY_INQUIRY),
+    ],
+)
+def test_intent_routing_menu_vs_table_availability(agent, query, expected_intent):
+    res = agent.handle_message(query)
+    assert res.intent == expected_intent
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "List all available dishes.",
+        "List all available dishes with their prices.",
+        "Show me the full menu.",
+        "Show the complete menu.",
+        "List all menu items grouped by category.",
+        "Show me all available menu items.",
+    ],
+)
+def test_explicit_full_menu_requests(agent, query):
+    res = agent.handle_message(query)
+    assert res.intent == Intent.MENU_INQUIRY
+    assert not res.is_fallback
+
+    with create_connection(agent.db_path) as conn:
+        items = get_menu_items(conn, available_only=True)
+
+    assert items, "Database must have available items for test"
+    for item in items:
+        assert item["name"] in res.text
+        assert _format_menu_price(item["price"]) in res.text
+
+    active_categories = {item["category"] for item in items}
+    for category in active_categories:
+        assert category in res.text
+
+
+def test_full_menu_excludes_unavailable_items(agent):
+    with create_connection(agent.db_path) as conn:
+        conn.execute("UPDATE menu_items SET is_available = 0 WHERE name = 'Margherita Pizza'")
+        conn.commit()
+
+    res = agent.handle_message("Show me the full menu.")
+    assert res.intent == Intent.MENU_INQUIRY
+    assert "Margherita Pizza" not in res.text
+    assert "Bruschetta Classica" in res.text
+
+
+def test_empty_available_menu_returns_friendly_message(agent):
+    with create_connection(agent.db_path) as conn:
+        conn.execute("UPDATE menu_items SET is_available = 0")
+        conn.commit()
+
+    res = agent.handle_message("List all available dishes.")
+    assert res.intent == Intent.MENU_INQUIRY
+    assert "no available items" in res.text.lower()
+    assert res.data and res.data["items"] == []
+
+
+def test_normal_menu_overview_remains_concise(agent):
+    res = agent.handle_message("What is on the menu?")
+    assert res.intent == Intent.MENU_INQUIRY
+    assert "Available dishes include" in res.text
+
+    with create_connection(agent.db_path) as conn:
+        items = get_menu_items(conn, available_only=True)
+
+    # First 4 items should be listed
+    for item in items[:4]:
+        assert item["name"] in res.text
+
+    # Beyond first 4 items should not all be listed in concise overview
+    beyond_four = [item["name"] for item in items[4:]]
+    assert any(name not in res.text for name in beyond_four)
+
+
+@pytest.mark.parametrize("question", [
+    "What is your most popular dish?",
+    "Which dish sells the most?",
+    "What do customers order most?",
+    "What is your best-selling item?",
+    "What are your most popular dishes?",
+])
+def test_popularity_questions_do_not_invent_a_winner(agent, question):
+    result = agent.handle_message(question)
+
+    assert result.intent == Intent.MENU_INQUIRY
+    assert result.is_fallback
+    assert "verified sales or popularity data" in result.text.lower()
+
+    with create_connection(agent.db_path) as conn:
+        items = get_menu_items(conn, available_only=True)
+
+    assert not any(item["name"] in result.text for item in items)
+
+
+def test_dessert_recommendation_is_not_treated_as_popularity_question(agent):
+    result = agent.handle_message("Recommend a dessert.")
+
+    assert result.intent == Intent.MENU_INQUIRY
+    assert result.data is not None
+    assert len(result.data["items"]) == 2
+    assert all(item["category"] == "Desserts" for item in result.data["items"])
+
+
+def test_popularity_question_does_not_interrupt_pending_reservation(agent):
+    session_id = "popularity_during_booking"
+
+    agent.handle_message("Book a table.", session_id=session_id)
+    result = agent.handle_message(
+        "What is your most popular dish?",
+        session_id=session_id,
+    )
+
+    assert result.intent == Intent.RESERVATION_REQUEST
+    assert result.needs_clarification

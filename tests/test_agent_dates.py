@@ -7,8 +7,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.database.init_db import init_database
-from src.services.agent_service import AgentService, Intent, normalize_date_input
+from src.services.agent_service import AgentService, Intent, normalize_date_input,normalize_time_input
 from src.services.llm_service import OllamaService
+
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +41,35 @@ def agent(tmp_path):
 ])
 def test_normalize_dates(value, expected):
     assert normalize_date_input(value) == expected
+
+@pytest.mark.parametrize('value, expected', [
+    ('7 p.m.', '19:00'),
+    ('7 p.m..', '19:00'),
+    ('7:30 p.m.', '19:30'),
+    ('7 a.m.', '07:00'),
+    ('12 a.m.', '00:00'),
+    ('12 p.m.', '12:00'),
+    ('7 PM', '19:00'),
+    ('Evening 7PM', '19:00'),
+    ('19:00', '19:00'),
+    ('25 p.m.', None),
+])
+def test_normalize_time_input(value, expected):
+    assert normalize_time_input(value) == expected
+
+
+@pytest.mark.parametrize('time_text, expected', [
+    ("It's 7 p.m..", '19:00'),
+    ('7 p.m.', '19:00'),
+    ('7:30 p.m.', '19:30'),
+    ('7 a.m.', '07:00'),
+    ('Evening 7PM', '19:00'),
+])
+def test_rule_based_dotted_meridiem_time_extraction(agent, time_text, expected):
+    _, entities = agent._extract_rule_based(
+        f'Book a table for 2 on November 15, 2026 at {time_text}'
+    )
+    assert entities.requested_reservation_time == expected
 
 
 def test_yearless_date_uses_next_occurrence(monkeypatch):

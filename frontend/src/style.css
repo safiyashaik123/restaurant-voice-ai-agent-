@@ -4,3 +4,29 @@
 @media(max-width:800px){.sidebar{position:static;width:auto;min-height:0;padding:0;background:transparent;border:0}.brand{position:absolute;top:16px;left:20px;z-index:5}.brand-mark{width:34px;height:34px}.brand strong{font-size:23px}.brand small{font-size:6px}.side-nav,.nav-label,.sidebar-spacer,.sidebar-note,.sidebar-bottom{display:none}.mobile-nav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:10;justify-content:space-around;background:#101a15ef;border-top:1px solid #314438;backdrop-filter:blur(14px);padding:8px 4px max(8px,env(safe-area-inset-bottom))}.mobile-nav button{background:transparent;border:0;color:#83988a;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:9px;padding:5px 16px}.mobile-nav button.active{color:#b8dfc2}.main{margin:0;width:100%}.topbar{height:68px;justify-content:flex-end;padding:0 20px}.breadcrumb,.local-label,.top-separator{display:none}.top-actions{gap:5px}.profile-icon{margin-left:8px}.content{padding:28px 20px 75px}.page-header{margin-bottom:22px}.page-header h1{font-size:32px;max-width:550px}.assistant-grid,.secondary-layout{grid-template-columns:1fr}.experience-panel{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}.voice-card{min-height:300px}.discover-card{min-height:300px}.panel-foot{display:none}.conversation-card{min-height:550px}.side-feature{display:grid;grid-template-columns:1fr 1fr}.side-feature-image{height:auto;min-height:220px}.main-footer{padding-bottom:10px}}
 @media(max-width:520px){.content{padding-left:14px;padding-right:14px}.page-header h1{font-size:28px}.page-header p{font-size:11px}.top-status{font-size:8px}.conversation-top{padding:15px}.private-pill{font-size:7px;padding:6px}.conversation-scroll{padding:22px 15px}.welcome-intro h2{font-size:23px}.suggestion-wrap{margin-left:0}.composer-area{padding:13px}.voice-line>span{display:none}.composer input{font-size:10px}.experience-panel{grid-template-columns:1fr 1fr;gap:10px}.voice-card{padding:14px 10px;min-height:260px}.voice-orb-wrap{width:135px;height:130px}.ring-one{width:125px;height:125px}.ring-two{width:105px;height:105px}.ring-three{width:85px;height:85px}.voice-orb{width:65px;height:65px}.voice-card h3{font-size:17px}.voice-card p{font-size:9px}.discover-image{height:115px}.discover-copy{padding:10px 12px}.discover-copy h3{font-size:18px}.discover-copy p{font-size:9px}.image-tag{font-size:6px}.page-card{padding:20px;min-height:0}.page-card h2{font-size:30px}.menu-stamp{width:55px;height:55px;font-size:9px}.form-grid{grid-template-columns:1fr}.dish{gap:10px}.dish-name{font-size:14px}.side-feature-image{min-height:190px}.side-feature-copy{padding:20px 14px}.side-feature-copy h3{font-size:20px}.main-footer{font-size:7px}.main-footer span:last-child{display:none}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Keep long private access codes inside their confirmation box */
+.confirmation-number.access-code {
+  display: grid;
+  grid-template-columns: minmax(5rem, auto) minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+}
+
+.confirmation-number.access-code > span {
+  min-width: 0;
+}
+
+.confirmation-number.access-code > strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .confirmation-number.access-code > strong {
+    text-align: left;
+  }
+}

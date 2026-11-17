@@ -152,6 +152,47 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.assertIn("Appetizers", res.text)
         self.assertIn("Mains", res.text)
 
+    def test_menu_inquiry_explicit_all_items(self):
+        """Explicit full-menu request lists every available dish."""
+        res = self.agent.handle_message(
+            "List all available dishes with their prices, grouped by category."
+        )
+
+        self.assertEqual(res.intent, Intent.MENU_INQUIRY)
+
+        expected_dishes = [
+                "Bruschetta Classica",
+                "Caprese Salad",
+                "Crispy Calamari",
+                "Vegan Mediterranean Bowl",
+                "Margherita Pizza",
+                "Rigatoni Bolognese",
+                "Grilled Salmon Fillet",
+                "Chef's Daily Rotating Special",
+                "Artisan Sorbet Trio",
+                "Classic Tiramisu",
+                "Fresh Mint Lemonade",
+                "Iced Oat Milk Latte",
+        ]
+
+        for dish in expected_dishes:
+            self.assertIn(dish, res.text)
+
+        for category in ["Appetizers", "Mains", "Desserts", "Beverages"]:
+            self.assertIn(category, res.text)
+
+    def test_available_dishes_and_available_tables_are_distinguished(self):
+        menu_result = self.agent.handle_message("List all available dishes.")
+        table_result = self.agent.handle_message("Are tables available?")
+
+        self.assertEqual(menu_result.intent, Intent.MENU_INQUIRY)
+        self.assertEqual(table_result.intent, Intent.AVAILABILITY_INQUIRY)
+
+        menu_today = self.agent.handle_message("What dishes are available today?")
+        table_two = self.agent.handle_message("Is a table available for two?")
+        self.assertEqual(menu_today.intent, Intent.MENU_INQUIRY)
+        self.assertEqual(table_two.intent, Intent.AVAILABILITY_INQUIRY)
+
     # -----------------------------------------------------------------------
     # 3. Ingredient Inquiry Routing Tests
     # -----------------------------------------------------------------------
@@ -189,11 +230,12 @@ class TestAgentServiceUnit(unittest.TestCase):
         self.assertIn("Dairy", res.text)
 
     def test_allergen_inquiry_verified_dish_zero_allergens(self):
-        """Verified dish with 0 allergens confirms verified absence of tracked allergens."""
+        """A dish with no recorded allergens must not be claimed allergen-free."""
         res = self.agent.handle_message("Are there allergens in the Artisan Sorbet Trio?")
         self.assertEqual(res.intent, Intent.ALLERGEN_INQUIRY)
         self.assertFalse(res.is_fallback)
-        self.assertIn("verified allergen records", res.text.lower())
+        self.assertIn("no allergens are recorded", res.text.lower())
+        self.assertIn("cross-contact", res.text.lower())
 
     def test_allergen_inquiry_unverified_dish_triggers_safe_fallback(self):
         """Unverified dish must NEVER claim to be allergen-free; returns staff referral."""
@@ -223,6 +265,29 @@ class TestAgentServiceUnit(unittest.TestCase):
         safe_names = [d["name"] for d in res.data["safe_items"]]
         self.assertIn("Artisan Sorbet Trio", safe_names)
         self.assertNotIn("Chef's Daily Rotating Special", safe_names)
+
+    def test_allergen_inquiry_lists_dishes_containing_gluten(self):
+        """Positive allergen query lists only verified dishes containing gluten."""
+        res = self.agent.handle_message("Which dishes contain gluten?")
+
+        self.assertEqual(res.intent, Intent.ALLERGEN_INQUIRY)
+        self.assertFalse(res.is_fallback)
+
+        expected = {
+            "Bruschetta Classica",
+            "Classic Tiramisu",
+            "Iced Oat Milk Latte",
+            "Margherita Pizza",
+            "Rigatoni Bolognese",
+        }
+
+        actual = {
+            item["name"]
+            for item in res.data["containing_items"]
+        }
+
+        self.assertEqual(actual, expected)
+        self.assertNotIn("Chef's Daily Rotating Special", actual)
 
     # -----------------------------------------------------------------------
     # 5. Availability Inquiry Routing Tests
@@ -308,7 +373,7 @@ class TestAgentServiceUnit(unittest.TestCase):
         """Short phone numbers are caught and rejected before reaching database."""
         session_id = "phone_val_test"
         tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
-        
+
         # Prime session with other slots
         state = self.agent.get_session(session_id)
         state.pending_intent = Intent.RESERVATION_REQUEST
@@ -348,6 +413,71 @@ class TestAgentServiceUnit(unittest.TestCase):
     # -----------------------------------------------------------------------
     # 7. Reservation Cancellation Tests
     # -----------------------------------------------------------------------
+
+
+    def test_reservation_lookup_returns_allocated_table(self):
+        """Verified lookup returns the actual allocated table number."""
+        tomorrow = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+        created = self.agent.handle_message(
+            f"Book table for 2 on {tomorrow} at 18:00 under Lookup User, phone 9870001112",
+            session_id="lookup_booking_setup",
+        )
+        self.assertTrue(created.success)
+
+        booking = created.data
+        self.assertIsNotNone(booking["table_number"])
+
+        session_id = "lookup_success_test"
+
+        first = self.agent.handle_message(
+            "I want to check my existing reservation.",
+            session_id=session_id,
+        )
+        self.assertTrue(first.needs_clarification)
+
+        second = self.agent.handle_message(
+            str(booking["reservation_id"]),
+            session_id=session_id,
+        )
+        self.assertTrue(second.needs_clarification)
+
+        result = self.agent.handle_message(
+            booking["access_code"],
+            session_id=session_id,
+        )
+
+        self.assertEqual(result.intent, Intent.RESERVATION_LOOKUP)
+        self.assertEqual(result.data["table_number"], booking["table_number"])
+        self.assertIn(f"Table {booking['table_number']}", result.text)
+
+    def test_reservation_lookup_wrong_access_code_does_not_reveal_table(self):
+        """Invalid access code must not reveal reservation or table details."""
+        session_id = "lookup_invalid_code_test"
+
+        first = self.agent.handle_message(
+            "I want to check my existing reservation.",
+            session_id=session_id,
+        )
+        self.assertTrue(first.needs_clarification)
+
+        second = self.agent.handle_message(
+            "999999",
+            session_id=session_id,
+        )
+        self.assertTrue(second.needs_clarification)
+
+        result = self.agent.handle_message(
+            "incorrect-access-code",
+            session_id=session_id,
+        )
+
+        self.assertFalse(result.success)
+        self.assertIsNone(result.data)
+        self.assertNotIn("Table T", result.text)
+        self.assertIn("could not verify", result.text.lower())
+
+
     def test_reservation_cancellation_success(self):
         """Cancelling an existing reservation frees table and confirms cancellation."""
         tomorrow_str = (restaurant_today() + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -605,6 +735,66 @@ class TestAgentServiceUnit(unittest.TestCase):
         # Sessions 0–2 must be evicted
         for i in range(3):
             self.assertNotIn(f"session_{i}", fast_ttl_agent._sessions)
+
+    def test_date_normalization_supported_formats(self):
+        today = restaurant_today()
+        expected = (today.replace(day=25)).strftime("%Y-%m-%d")
+
+        cases = [
+            ("25 November", "2026-11-25"),
+            ("25 November 2026", "2026-11-25"),
+            ("25/11", "2026-11-25"),
+            ("25/11/2026", "2026-11-25"),
+            ("2026-11-25", "2026-11-25"),
+            ("November 25", "2026-11-25"),
+            ("November 25, 2026", "2026-11-25"),
+        ]
+
+        for value, expected_date in cases:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    normalize_date_input(value),
+                    expected_date,
+                )
+
+    def test_date_normalization_relative_dates(self):
+        today = restaurant_today()
+
+        self.assertEqual(
+            normalize_date_input("today"),
+            today.strftime("%Y-%m-%d"),
+        )
+        self.assertEqual(
+            normalize_date_input("tomorrow"),
+            (today + timedelta(days=1)).strftime("%Y-%m-%d"),
+        )
+
+    def test_date_normalization_rejects_invalid_dates(self):
+        for value in ["32/11/2026", "31 February 2026", "not a date"]:
+            with self.subTest(value=value):
+                self.assertIsNone(normalize_date_input(value))
+
+    def test_date_normalization_next_weekdays(self):
+        expected_dates = {
+            "next Monday": "2026-11-23",
+            "next Tuesday": "2026-11-17",
+            "next Wednesday": "2026-11-18",
+            "next Thursday": "2026-11-19",
+            "next Friday": "2026-11-20",
+            "next Saturday": "2026-11-21",
+            "next Sunday": "2026-11-22",
+        }
+
+        with patch(
+            "src.services.agent_service.restaurant_today",
+            return_value=date(2026, 11, 16),
+        ):
+            for value, expected in expected_dates.items():
+                with self.subTest(value=value):
+                    self.assertEqual(
+                        normalize_date_input(value),
+                        expected,
+                    )
 
 
 if __name__ == "__main__":
