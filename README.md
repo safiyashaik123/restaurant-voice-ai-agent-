@@ -4,6 +4,12 @@ A local, voice-enabled restaurant assistant that understands customer requests, 
 
 The application combines a React frontend, FastAPI backend, local speech recognition, a local language model, text-to-speech, and SQLite database operations.
 
+## Live Demo
+
+[Open Restaurant Voice AI Agent](https://restaurant-voice-ai-agent-gold.vercel.app/)
+
+[GitHub Repository](https://github.com/safiyashaik123/restaurant-voice-ai-agent-)
+
 ## Features
 
 - **Voice interaction:** Capture customer speech through the browser microphone and respond with synthesized audio.
@@ -184,7 +190,7 @@ Default settings:
 From the project root, activate the virtual environment and run:
 
 ```bash
-python -m uvicorn src.api.main:app --reload
+python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### 6. Start the frontend
@@ -254,6 +260,14 @@ The project has undergone:
 - SQLite-based restaurant data
 - Deterministic reservation operations
 - Database-grounded food safety responses
+
+## Deployment
+
+**Frontend:** Deployed on Vercel.
+
+**Backend:** Runs locally using FastAPI, Ollama, Faster-Whisper, Piper TTS, and SQLite. Public access is provided through a Cloudflare Quick Tunnel.
+
+The backend requires the host machine and tunnel to remain running. The Quick Tunnel URL is temporary and may change when restarted.
 
 ## Future Scope
 
