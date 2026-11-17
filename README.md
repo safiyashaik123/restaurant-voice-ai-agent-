@@ -143,11 +143,11 @@ The required speech recognition and speech generation models must also be availa
 
 ### 1. Clone the repository
 
-After publishing the repository, replace the placeholder URL with its GitHub URL:
+Clone the repository:
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
-cd restaurant-voice-agent
+git clone https://github.com/safiyashaik123/restaurant-voice-ai-agent-.git
+cd restaurant-voice-ai-agent-
 ```
 
 ### 2. Set up the Python environment
@@ -244,7 +244,6 @@ The project has undergone:
 - Reservation creation, lookup, and cancellation checks
 - Error-handling verification
 - End-to-end manual testing
-- Performance benchmarking
 - Responsive frontend checks
 
 ## Project Constraints
@@ -264,8 +263,8 @@ Possible extensions include telephony integration, restaurant POS integration, m
 
 This project is licensed under the MIT License.
 
-You are free to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of this software, subject to the conditions of the MIT License.
+The MIT License applies to this project's original code. Third-party dependencies and model assets remain subject to their respective licenses.
 
-See the LICENSE file for the complete license terms.
+See the [LICENSE](LICENSE) file for the complete license terms.
 
 Copyright © 2026 Safiya Shaik.
